@@ -1,0 +1,7 @@
+Notes:
+
+- Syntax from the current (opengl) version of vismach has been used as much as possible but some changes are necessary
+- vtk-vismach supports dynamic loading of 3D geometry (eg loading specific files depending on the number of the loaded tool)
+- For further information see comments in the files
+
+- 'import vtk' should probably be changed to imports for required modules only
