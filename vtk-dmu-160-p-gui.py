@@ -94,6 +94,7 @@ c.newpin("rot_th2", hal.HAL_FLOAT, hal.HAL_IN)
 c.newpin("rot_th3", hal.HAL_FLOAT, hal.HAL_IN)
 c.ready()
 
+
 # give endpoint Z values and radii
 # resulting cylinder is on the Z axis
 class HalToolCylinder(CylinderZ):
@@ -267,8 +268,31 @@ model = Collection([
         machine_axes,
         spindle_xz,
         table,
-        base,
+        base
         #CylinderOriented(-100,100,100,-1000,-1000,1000,50),
         #ArrowOriented(0,0,0,-1000,-1000,1000,50)
         ])
-main(c,model, tooltip, work, window_width=1400, window_height=1000, window_title = "Vtk_Vismach Tutorial")
+
+#hud
+myhud = Hud("mint", 0.4)
+myhud.add_txt("DMU-160-P")
+myhud.add_txt("------------")
+myhud.add_txt("")
+myhud.add_txt("Kinematic Mode:")
+myhud.add_txt("IDENTITY",[0,3])
+myhud.add_txt("TCP",1)
+myhud.add_txt("TOOL",2)
+myhud.add_txt("")
+myhud.add_txt("TWP-Orientation Vector X:")
+myhud.add_pin("Xx: {:8.3f}","vtk-dmu-160-p-gui.twp_xx")
+myhud.add_pin("Xy: {:8.3f}","vtk-dmu-160-p-gui.twp_xy")
+myhud.add_pin("Xz: {:8.3f}","vtk-dmu-160-p-gui.twp_xz")
+myhud.add_txt("")
+myhud.add_txt("TWP-Orientation Vector Z:")
+myhud.add_pin("Zx: {:8.3f}","vtk-dmu-160-p-gui.twp_zx")
+myhud.add_pin("Zy: {:8.3f}","vtk-dmu-160-p-gui.twp_zy")
+myhud.add_pin("Zz: {:8.3f}","vtk-dmu-160-p-gui.twp_zz")
+myhud.show_tags_in_pin("motion.switchkins-type")
+#/hud
+
+main(c,model, tooltip, work, hud=myhud, window_width=1400, window_height=1000, window_title = "Vtk_Vismach Tutorial")

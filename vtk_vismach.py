@@ -608,6 +608,7 @@ class Color(Collection):
         for part in self.GetParts():
             find_actors(part)
 
+
 class HalColor(Collection):
     def __init__(self, parts, color, opacity, comp, const, var, color_true=1, color_false=0):
         super().__init__(parts)
@@ -627,6 +628,7 @@ class HalColor(Collection):
             self.SetScale(s_t,s_t,s_t)
         else:
             self.SetScale(s_f,s_f,s_f)
+
 
 class Translate(Collection):
     def __init__(self, parts, x, y, z):
@@ -806,8 +808,92 @@ class HalShow(Collection):
             self.SetScale(s_f,s_f,s_f)
 
 
+# Create a text overlay (HUD)
+# color can be either name string (eg "red","magenta") or normalized RGB as tuple (eg (0.7,0.7,0.1))
+class Hud(vtk.vtkActor2D):
+    def __init__(self, color, opacity=1, font_size=20, line_spacing=1):
+        self.strs = []
+        self.hud_lines = []
+        self.show_tags = []
+        self.hide_alls = []
+        self.textMapper = vtk.vtkTextMapper()
+        tprop = self.textMapper.GetTextProperty()
+        tprop.SetLineSpacing(line_spacing)
+        tprop.SetFontSize(font_size)
+        tprop.SetFontFamilyAsString("Courier")
+        tprop.SetJustificationToLeft()
+        tprop.SetVerticalJustificationToTop()
+        colors = vtk.vtkNamedColors()
+        if not isinstance(color, tuple):
+            tprop.SetColor(colors.GetColor3d(color))
+        else:
+            tprop.SetColor(color)
+        tprop.SetOpacity(opacity)
+        self.SetMapper(self.textMapper)
+        self.GetPositionCoordinate().SetCoordinateSystemToNormalizedDisplay()
+        self.GetPositionCoordinate().SetValue(0.05, 0.9)
+
+    # displays a string, optionally a tag or list of tags can be assigned
+    def add_txt(self, string, tag=None):
+        self.hud_lines += [[str(string), None, tag]]
+
+    # displays a formatted pin value (can be embedded in a string)
+    def add_pin(self, string, pin=None, tag=None):
+        self.hud_lines += [[str(string), pin, tag]]
+
+    # shows all lines with the specified tag if the pin value = val
+    def show_tag_if_same(self, tag, pin, val=True):
+        self.show_tags += [[tag, pin, val]]
+
+    # shows all lines with a tag equal to the pin value + offset
+    def show_tags_in_pin(self, pin, offs=0):
+        self.show_tags += [[pin, None, offs]]
+
+    # hides the complete hud if the pin value is equal to val
+    def hide_all(self, pin, val=True):
+        self.hide_alls += [[pin, val]]
+
+    # update the lines in the hud using the lists created above
+    def update(self):
+        hide_hud = 0
+        strs = []
+        show_list = [None]
+        # check if hud should be hidden
+        for a in self.hide_alls:
+            if hal.get_value(a[0]) == a[1]:
+                hide_hud = 1
+        if hide_hud == 0:
+            # create list of all line tags to be shown
+            for b in self.show_tags:
+                if b[1] == None: # _show_tags_in_pin
+                    tag = int(hal.get_value(b[0]) + b[2])
+                else: # _show_tag_if_same
+                    if  hal.get_value(b[1]) == b[2]:
+                        tag = b[0]
+                if not isinstance(tag, list):
+                    tag = [tag]
+                show_list = show_list + tag
+            # build the
+            for c in self.hud_lines:
+                if not isinstance(c[2], list):
+                    c[2] = [c[2]]
+                if any(item in c[2] for item in show_list):
+                    if c[1] == None: # _txt
+                        strs += [c[0]]
+                    else: # _pin
+                        strs += [c[0].format(hal.get_value(c[1]))]
+        combined_string = ""
+        for string in strs:
+            combined_string += (string + "\n")
+        self.textMapper.SetInput(combined_string)
+
+
+
+
+
+
 def main(comp,
-         model, tooltip, work,
+         model, tooltip, work, hud=None,
          window_title="Vtk-Vismach", window_width=600, window_height=300,
          camera_azimuth=-50, camera_elevation=30,
          background_rgb = (0.2, 0.3, 0.4)):
@@ -832,6 +918,7 @@ def main(comp,
                     get_actors_to_update(item)
         get_actors_to_update(model)
         backplot.update()
+        hud.update()
         vtkWidget.GetRenderWindow().Render()
 
     app = Qt.QApplication([])
@@ -844,6 +931,8 @@ def main(comp,
     renderer = vtk.vtkRenderer()
     renderer.AddActor(model)
     renderer.AddActor(backplot)
+    if hud:
+        renderer.AddActor(hud)
     renderer.SetBackground(*background_rgb)
     renderWindow = vtk.vtkRenderWindow()
     renderWindow.AddRenderer(renderer)
@@ -861,8 +950,6 @@ def main(comp,
         return axes
     orientation_marker = vtk.vtkOrientationMarkerWidget()
     orientation_marker.SetOrientationMarker(trihedron())
-
-
     #orientation_marker.InteractiveOn()
     # Camera setup
     camera = renderer.GetActiveCamera()
