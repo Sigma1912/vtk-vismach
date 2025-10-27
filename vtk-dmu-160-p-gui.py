@@ -26,9 +26,6 @@ except Exception as detail:
 c = hal.component("vtk-dmu-160-p-gui")
 # nutation-angle
 c.newpin("nutation_angle", hal.HAL_FLOAT, hal.HAL_IN)
-# tool offsets
-c.newpin("tool_length", hal.HAL_FLOAT, hal.HAL_IN)
-c.newpin("tool_diameter", hal.HAL_FLOAT, hal.HAL_IN)
 # virtual tool rotation
 c.newpin("virtual_rotation", hal.HAL_FLOAT, hal.HAL_IN)
 # geometric offsets in the spindle-rotary-assembly
@@ -83,17 +80,14 @@ c.newpin("rot_th3", hal.HAL_FLOAT, hal.HAL_IN)
 c.ready()
 
 
-# give endpoint Z values and radii
-# resulting cylinder is on the Z axis
+# create cylinder using current tool length and diameter
 class HalToolCylinder(CylinderZ):
     def __init__(self, comp, *args):
         super().__init__(self, comp, *args)
-        self.comp = comp
 
     def coords(self):
-        r = 0.1 # default if hal pin not set
-        if (c.tool_diameter > 0): r = c.tool_diameter/2
-        return c.tool_length, r
+        r = hal.get_value('halui.tool.diameter')/2
+        return hal.get_value('motion.tooloffset.z'), r
 
 
 # used to rotate parts around the nutation axis
@@ -212,7 +206,7 @@ work_plane_active =  HalGridFromNormalAndDirection(c,
         s=300
         )
 # for twp-active = true, we show the plane in pink
-work_plane_active = Color([work_plane_active],(1,0,1),0.5)
+work_plane_active = Color([work_plane_active],(1,0,1),0.3)
 work_plane_active = HalShow([work_plane_active],c,1,"twp_active")
 # Create a coordinate system for the twp-plane
 work_plane_coords =  HalCoordsFromNormalAndDirection(c,
