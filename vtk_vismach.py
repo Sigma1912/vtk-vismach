@@ -880,6 +880,8 @@ class Hud(vtk.vtkActor2D):
     def __init__(self, comp, var, const, color, opacity=1, font_size=20, line_spacing=1):
         self.comp = comp
         self.var = var
+        print("init self.comp, ", self.var)
+        print("init self.var, ", self.var)
         self.const = const
         self.strs = []
         self.hud_lines = []
@@ -906,26 +908,28 @@ class Hud(vtk.vtkActor2D):
 
     # displays a string, optionally a tag or list of tags can be assigned
     def add_txt(self, string, tag=None):
-        self.hud_lines += [[str(string), None, tag]]
+        self.hud_lines += [[str(string), None, None, tag]]
 
     # displays a formatted pin value (can be embedded in a string)
-    def add_pin(self, string, pin=None, tag=None):
-        self.hud_lines += [[str(string), pin, tag]]
+    def add_pin(self, string, comp, pin, tag=None):
+        self.hud_lines += [[str(string), comp, pin, tag]]
 
     # shows all lines with the specified tags if the pin value = val
-    def show_tags_if_pin_eq_val(self, tag, pin, val=True):
-        self.show_tags += [[tag, pin, val]]
+    def show_tags_if_pin_eq_val(self, tags, comp, pin, val=True):
+        self.show_tags += [[tags, comp, pin, val]]
 
     # shows all lines with a tag equal to the pin value + offset
-    def show_tag_eq_pin_offs(self, pin, offs=0):
-        self.show_tags += [[pin, None, offs]]
+    def show_tag_eq_pin_offs(self, comp, pin, offs=0):
+        self.show_tags += [[None, comp, pin, offs]]
 
     # hides the complete hud if the pin value is equal to val
-    def hide_all(self, pin, val=True):
-        self.hide_alls += [[pin, val]]
+    def hide_all(self,comp, pin, val=True):
+        self.hide_alls += [[comp, pin, val]]
 
     # update the lines in the hud using the lists created above
     def update(self):
+        print("self.comp, ", self.var)
+        print("self.var, ", self.var)
         for v in ['var']:
             # create variable from list and update from class variables of the same name
             globals()[v] = update_passed_args(self, v)
@@ -935,28 +939,43 @@ class Hud(vtk.vtkActor2D):
         show_list = [None]
         # check if hud should be hidden
         for a in self.hide_alls:
-            if hal.get_value(a[0]) == a[1]:
+            comp = a[0]
+            pin = a[1]
+            const = a[2]
+            var = hal.get_value(pin) if comp == None else comp[pin]
+            if  var == const:
                 hide_hud = 1
         if hide_hud == 0:
             # create list of all line tags to be shown
             for b in self.show_tags:
-                if b[1] == None: # show_tag_eq_pin_offs
-                    tag = int(hal.get_value(b[0]) + b[2])
+                tags = b[0]
+                comp = b[1]
+                pin  = b[2]
+                val_offs = b[3]
+                if tags == None: # show_tag_eq_pin_offs
+                    var = hal.get_value(pin) if comp == None else comp[pin]
+                    tag = int(var + val_offs)
                 else: # show_tags_if_pin_eq_val
-                    if  hal.get_value(b[1]) == b[2]:
-                        tag = b[0]
+                    var = hal.get_value(pin) if comp == None else comp[pin]
+                    if  var == val_offs:
+                        tag = tags
                 if not isinstance(tag, list):
                     tag = [tag]
                 show_list = show_list + tag
             # build the strings
             for c in self.hud_lines:
-                if not isinstance(c[2], list):
-                    c[2] = [c[2]]
-                if any(item in c[2] for item in show_list):
-                    if c[1] == None: # txt
-                        strs += [c[0]]
+                text = c[0]
+                comp = c[1]
+                pin  = c[2]
+                tags = c[3]
+                if not isinstance(tags, list):
+                    tags = [tags]
+                if any(tag in tags for tag in show_list):
+                    if comp == None and pin == None: # txt
+                        strs += [text]
                     else: # pin
-                        strs += [c[0].format(hal.get_value(c[1]))]
+                        var = hal.get_value(pin) if comp == None else comp[pin]
+                        strs += [text.format(var)]
         combined_string = ""
         for string in strs:
             combined_string += (string + "\n")
@@ -1067,7 +1086,7 @@ def main(comp,
     # Set up a Qt timer to create update events
     timer = QTimer()
     timer.timeout.connect(update)
-    timer.start(100)
+    timer.start(10000)
     # Show Qt window
     mainWindow.show()
     app.exec_()
