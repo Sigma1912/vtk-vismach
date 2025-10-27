@@ -3,7 +3,7 @@
 # email: mueller_david@hotmail.com
 
 import hal
-import vtk
+import vtk  # this should be changed to only import the used modules
 import os
 
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
@@ -129,7 +129,6 @@ class CylinderOriented(vtk.vtkActor):
         mapper.SetInputConnection(cylinderSource.GetOutputPort())
         self.SetUserMatrix(transform.GetMatrix())
         self.SetMapper(mapper)
-
 
 
 # Creates a 3d arrow pointing from (xs,ys,zs) to (xe,ye,ze)
@@ -330,6 +329,11 @@ class Plotter(vtk.vtkActor):
         self.lines.Modified()
         self.SetUserTransform(vtk.vtkTransform())
         self.GetUserTransform().Concatenate(work2world)
+        # Calculate tool2work to experiment
+        self.tool2work = vtk.vtkTransform()
+        self.tool2work.Concatenate(world2work)
+        self.tool2work.Concatenate(tool2world) # tool position [0,0,0] > Work [x,y,z]
+
 
 
 # create (invisible) actor that can be used to track combined transformation to world coordinates
@@ -816,6 +820,7 @@ class Hud(vtk.vtkActor2D):
         self.hud_lines = []
         self.show_tags = []
         self.hide_alls = []
+        self.extra_text = None
         self.textMapper = vtk.vtkTextMapper()
         tprop = self.textMapper.GetTextProperty()
         tprop.SetLineSpacing(line_spacing)
@@ -831,7 +836,7 @@ class Hud(vtk.vtkActor2D):
         tprop.SetOpacity(opacity)
         self.SetMapper(self.textMapper)
         self.GetPositionCoordinate().SetCoordinateSystemToNormalizedDisplay()
-        self.GetPositionCoordinate().SetValue(0.05, 0.9)
+        self.GetPositionCoordinate().SetValue(0.05, 0.95)
 
     # displays a string, optionally a tag or list of tags can be assigned
     def add_txt(self, string, tag=None):
@@ -841,12 +846,12 @@ class Hud(vtk.vtkActor2D):
     def add_pin(self, string, pin=None, tag=None):
         self.hud_lines += [[str(string), pin, tag]]
 
-    # shows all lines with the specified tag if the pin value = val
-    def show_tag_if_same(self, tag, pin, val=True):
+    # shows all lines with the specified tags if the pin value = val
+    def show_tags_if_pin_eq_val(self, tag, pin, val=True):
         self.show_tags += [[tag, pin, val]]
 
     # shows all lines with a tag equal to the pin value + offset
-    def show_tags_in_pin(self, pin, offs=0):
+    def show_tag_eq_pin_offs(self, pin, offs=0):
         self.show_tags += [[pin, None, offs]]
 
     # hides the complete hud if the pin value is equal to val
@@ -865,26 +870,27 @@ class Hud(vtk.vtkActor2D):
         if hide_hud == 0:
             # create list of all line tags to be shown
             for b in self.show_tags:
-                if b[1] == None: # _show_tags_in_pin
+                if b[1] == None: # show_tag_eq_pin_offs
                     tag = int(hal.get_value(b[0]) + b[2])
-                else: # _show_tag_if_same
+                else: # show_tags_if_pin_eq_val
                     if  hal.get_value(b[1]) == b[2]:
                         tag = b[0]
                 if not isinstance(tag, list):
                     tag = [tag]
                 show_list = show_list + tag
-            # build the
+            # build the strings
             for c in self.hud_lines:
                 if not isinstance(c[2], list):
                     c[2] = [c[2]]
                 if any(item in c[2] for item in show_list):
-                    if c[1] == None: # _txt
+                    if c[1] == None: # txt
                         strs += [c[0]]
-                    else: # _pin
+                    else: # pin
                         strs += [c[0].format(hal.get_value(c[1]))]
         combined_string = ""
         for string in strs:
             combined_string += (string + "\n")
+        combined_string += self.extra_text
         self.textMapper.SetInput(combined_string)
 
 
@@ -918,6 +924,11 @@ def main(comp,
                     get_actors_to_update(item)
         get_actors_to_update(model)
         backplot.update()
+        t2w = backplot.tool2work.GetMatrix()
+        r1=("{:8.3f} {:8.3f} {:8.3f} {:8.3f}".format(t2w.GetElement(0,0), t2w.GetElement(0,1), t2w.GetElement(0,2), t2w.GetElement(0,3)))
+        r2=("{:8.3f} {:8.3f} {:8.3f} {:8.3f}".format(t2w.GetElement(1,0), t2w.GetElement(1,1), t2w.GetElement(1,2), t2w.GetElement(1,3)))
+        r3=("{:8.3f} {:8.3f} {:8.3f} {:8.3f}".format(t2w.GetElement(2,0), t2w.GetElement(2,1), t2w.GetElement(2,2), t2w.GetElement(2,3)))
+        hud.extra_text = "\ntool2work Matrix:"+"\n"+r1+"\n"+r2+"\n"+r3
         hud.update()
         vtkWidget.GetRenderWindow().Render()
 
