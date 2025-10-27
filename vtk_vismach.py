@@ -796,11 +796,15 @@ class HalShow(Collection):
 # Create a text overlay (HUD)
 # color can be either name string (eg "red","magenta") or normalized RGB as tuple (eg (0.7,0.7,0.1))
 class Hud(vtk.vtkActor2D):
-    def __init__(self, color, opacity=1, font_size=20, line_spacing=1):
+    def __init__(self, comp, var, const, color, opacity=1, font_size=20, line_spacing=1):
+        self.comp = comp
+        self.var = var
+        self.const = const
         self.strs = []
         self.hud_lines = []
         self.show_tags = []
         self.hide_alls = []
+        self.extra_text_enable = False
         self.extra_text = None
         self.textMapper = vtk.vtkTextMapper()
         tprop = self.textMapper.GetTextProperty()
@@ -841,7 +845,11 @@ class Hud(vtk.vtkActor2D):
 
     # update the lines in the hud using the lists created above
     def update(self):
-        hide_hud = 0
+        for v in ['var']:
+            # create variable from list and update from class variables of the same name
+            globals()[v] = update_passed_args(self, v)
+        hide_hud = 0 if var == self.const else 1
+
         strs = []
         show_list = [None]
         # check if hud should be hidden
@@ -871,7 +879,8 @@ class Hud(vtk.vtkActor2D):
         combined_string = ""
         for string in strs:
             combined_string += (string + "\n")
-        combined_string += self.extra_text
+        if self.extra_text_enable and self.extra_text and not hide_hud:
+            combined_string += self.extra_text
         self.textMapper.SetInput(combined_string)
 
 
@@ -880,7 +889,7 @@ class Hud(vtk.vtkActor2D):
 
 
 def main(comp,
-         model, tooltip, work, hud=None,
+         model, tooltip, work, huds,
          window_title="Vtk-Vismach", window_width=600, window_height=300,
          camera_azimuth=-50, camera_elevation=30,
          background_rgb = (0.2, 0.3, 0.4)):
@@ -909,8 +918,9 @@ def main(comp,
         r1=("{:8.3f} {:8.3f} {:8.3f} {:8.3f}".format(t2w.GetElement(0,0), t2w.GetElement(0,1), t2w.GetElement(0,2), t2w.GetElement(0,3)))
         r2=("{:8.3f} {:8.3f} {:8.3f} {:8.3f}".format(t2w.GetElement(1,0), t2w.GetElement(1,1), t2w.GetElement(1,2), t2w.GetElement(1,3)))
         r3=("{:8.3f} {:8.3f} {:8.3f} {:8.3f}".format(t2w.GetElement(2,0), t2w.GetElement(2,1), t2w.GetElement(2,2), t2w.GetElement(2,3)))
-        hud.extra_text = "\ntool2work Matrix:"+"\n"+r1+"\n"+r2+"\n"+r3
-        hud.update()
+        for hud in huds:
+            hud.extra_text = "\ntool2work Matrix:"+"\n"+r1+"\n"+r2+"\n"+r3
+            hud.update()
         vtkWidget.GetRenderWindow().Render()
 
     app = Qt.QApplication([])
@@ -923,8 +933,11 @@ def main(comp,
     renderer = vtk.vtkRenderer()
     renderer.AddActor(model)
     renderer.AddActor(backplot)
-    if hud:
-        renderer.AddActor(hud)
+    if huds:
+        if not isinstance(huds, list):
+            huds = [huds]
+        for hud in huds:
+            renderer.AddActor(hud)
     renderer.SetBackground(*background_rgb)
     renderWindow = vtk.vtkRenderWindow()
     renderWindow.AddRenderer(renderer)

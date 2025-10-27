@@ -261,7 +261,7 @@ model = Collection([
         ])
 
 #hud
-myhud = Hud("mint", 0.4)
+myhud = Hud(None,True,True,"mint", 0.4) # This will always be displayed
 myhud.add_txt("DMU-160-P")
 myhud.add_txt("---------")
 myhud.add_txt("")
@@ -279,6 +279,23 @@ myhud.add_pin("Zx: {:8.3f}","vtk-dmu-160-p-gui.twp_zx")
 myhud.add_pin("Zy: {:8.3f}","vtk-dmu-160-p-gui.twp_zy")
 myhud.add_pin("Zz: {:8.3f}","vtk-dmu-160-p-gui.twp_zz")
 myhud.show_tag_eq_pin_offs("motion.switchkins-type")
+
+myhud2= Hud(None,"motion.switchkins-type",2,"tomato", 0.4)
+myhud2.add_txt("")
+myhud2.add_txt("")
+myhud2.add_txt("")
+myhud2.add_txt("")
+myhud2.add_txt("")
+myhud2.add_txt("")
+myhud2.add_pin("    {:8.3f}","vtk-dmu-160-p-gui.twp_xx")
+myhud2.add_pin("    {:8.3f}","vtk-dmu-160-p-gui.twp_xy")
+myhud2.add_pin("    {:8.3f}","vtk-dmu-160-p-gui.twp_xz")
+myhud2.add_txt("")
+myhud2.add_txt("")
+myhud2.add_pin("    {:8.3f}","vtk-dmu-160-p-gui.twp_zx")
+myhud2.add_pin("    {:8.3f}","vtk-dmu-160-p-gui.twp_zy")
+myhud2.add_pin("    {:8.3f}","vtk-dmu-160-p-gui.twp_zz")
+myhud2.extra_text_enable = True
 #/hud
 
-main(c,model, tooltip, work, hud=myhud, window_width=1400, window_height=1000, window_title = "Vtk_Vismach Tutorial")
+main(c,model, tooltip, work, huds=[myhud,myhud2], window_width=1400, window_height=1000, window_title = "Vtk_Vismach Tutorial")
