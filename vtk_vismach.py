@@ -30,13 +30,13 @@ def update_passed_args(self, v):
 class CoordsBase(vtk.vtkActor):
     def __init__(self, *args):
         if args and isinstance(args[0], hal.component):
-           self.comp = args[0]
-           args = args[1:]
+            self.comp = args[0]
+            args = args[1:]
         elif args and args[0] == None:
-           self.comp = None
-           args = args[1:]
+            self.comp = None
+            args = args[1:]
         else:
-           self.comp = None
+            self.comp = None
         self._coords = args
         if hasattr(self, "create"):
             self.create()
@@ -53,22 +53,94 @@ class CoordsBase(vtk.vtkActor):
             return v
 
 
+class Box(CoordsBase):
+    def create(self, *args):
+        x1, y1, z1, x2, y2, z2 = self.coords()
+        if x1 > x2:
+            tmp = x1
+            x1 = x2
+            x2 = tmp
+        if y1 > y2:
+            tmp = y1
+            y1 = y2
+            y2 = tmp
+        if z1 > z2:
+            tmp = z1
+            z1 = z2
+            z2 = tmp
+        self.cube = vtk.vtkCubeSource()
+        self.cube.SetXLength(x2-x1)
+        self.cube.SetYLength(y2-y1)
+        self.cube.SetZLength(z2-z1)
+        self.cube.Update()
+        mapper = vtk.vtkPolyDataMapper()
+        mapper.SetInputData(self.cube.GetOutput())
+        self.SetMapper(mapper)
+        self.SetPosition(x1,y1,z1)
+        self.AddPosition((x2-x1)/2,(y2-y1)/2,(z2-z1)/2)
+
+
+    def update(self):
+        x1, y1, z1, x2, y2, z2 = self.coords()
+        if x1 > x2:
+            tmp = x1
+            x1 = x2
+            x2 = tmp
+        if y1 > y2:
+            tmp = y1
+            y1 = y2
+            y2 = tmp
+        if z1 > z2:
+            tmp = z1
+            z1 = z2
+            z2 = tmp
+        self.cube.SetXLength(x2-x1)
+        self.cube.SetYLength(y2-y1)
+        self.cube.SetZLength(z2-z1)
+        self.cube.Update()
+        self.SetPosition(x1,y1,z1)
+        self.AddPosition((x2-x1)/2,(y2-y1)/2,(z2-z1)/2)
+
+
 # specify the width in X and Y, and the height in Z
 # the box is centered on the origin
 class BoxCentered(CoordsBase):
     def create(self, *args):
         xw, yw, zw = self.coords()
-        cube = vtk.vtkCubeSource()
-        cube.SetXLength(xw)
-        cube.SetYLength(yw)
-        cube.SetZLength(zw)
-        cube.Update()
-        # mapper
+        self.cube = vtk.vtkCubeSource()
+        self.cube.SetXLength(xw)
+        self.cube.SetYLength(yw)
+        self.cube.SetZLength(zw)
+        self.cube.Update()
         mapper = vtk.vtkPolyDataMapper()
-        mapper.SetInputData(cube.GetOutput())
-        # Actor
-        colors = vtk.vtkNamedColors()
+        mapper.SetInputData(self.cube.GetOutput())
         self.SetMapper(mapper)
+
+    def update(self):
+        xw, yw, zw = self.coords()
+        self.cube.SetXLength(xw)
+        self.cube.SetYLength(yw)
+        self.cube.SetZLength(zw)
+        self.cube.Update()
+
+# specify the width in X and Y, and the height in Z
+# the box is centered on the origin
+class Sphere(CoordsBase):
+    def create(self, *args):
+        x, y, z, r = self.coords()
+        self.sphere = vtk.vtkSphereSource()
+        self.sphere.SetRadius(r)
+        self.sphere.Update()
+        mapper = vtk.vtkPolyDataMapper()
+        mapper.SetInputData(self.sphere.GetOutput())
+        self.SetMapper(mapper)
+        self.SetPosition(x,y,z)
+
+    def update(self):
+        x, y, z, r = self.coords()
+        self.sphere.SetRadius(r)
+        self.sphere.Update()
+        self.SetPosition(x,y,z)
 
 
 # Create cylinder along Y axis (default direction for vtkCylinderSource)
@@ -80,10 +152,8 @@ class CylinderY(CoordsBase):
         self.cylinder.SetHeight(length)
         self.cylinder.SetResolution(10)
         self.cylinder.Update()
-        # mapper
         self.mapper = vtk.vtkPolyDataMapper()
         self.mapper.SetInputData(self.cylinder.GetOutput())
-        # Actor
         self.SetMapper(self.mapper)
 
     def update(self):
@@ -111,8 +181,13 @@ class CylinderZ(CylinderY):
 
 
 # Creates a 3d cylinder from (xs,ys,zs) to (xe,ye,ze)
-class CylinderOriented(vtk.vtkActor):
-    def __init__(self, xs, ys, zs, xe, ye, ze, radius, resolution=10):
+class CylinderOriented(CoordsBase):
+    def create(self):
+        self.update()
+
+    def update(self):
+        xs, ys, zs, xe, ye, ze, radius = self.coords()
+        resolution = 10
         # Create a cylinder (cylinders are created along Y axis by default)
         # Cylinder center is in the middle of the cylinder
         cylinderSource = vtk.vtkCylinderSource()
@@ -155,8 +230,13 @@ class CylinderOriented(vtk.vtkActor):
 
 
 # Creates a 3d arrow pointing from (xs,ys,zs) to (xe,ye,ze)
-class ArrowOriented(vtk.vtkActor):
-    def __init__(self, xs, ys, zs, xe, ye, ze, radius, resolution=10):
+class ArrowOriented(CoordsBase):
+    def create(self):
+        self.update()
+
+    def update(self):
+        xs, ys, zs, xe, ye, ze, radius = self.coords()
+        resolution = 10
         # Create arrow (arrows are created along the X axis by default)
         cylinderSource = vtk.vtkArrowSource()
         cylinderSource.SetShaftRadius(radius)
@@ -173,6 +253,7 @@ class ArrowOriented(vtk.vtkActor):
         # The X axis is a vector from start to end
         vtk.vtkMath.Subtract(endPoint, startPoint, normalizedX)
         length = vtk.vtkMath.Norm(normalizedX)
+        if length < 0.1: length = 1
         cylinderSource.SetTipLength(radius*2/length)
         vtk.vtkMath.Normalize(normalizedX)
         vtk.vtkMath.Cross(normalizedX, [0,0,1], normalizedZ)

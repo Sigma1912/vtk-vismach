@@ -249,15 +249,21 @@ table = Translate([table], 0, -machine_zero_y, 0)
 # Create machine base
 base = Color([EGO_BC],(0.3,0.3,0.3),1)
 
+arrow = ArrowOriented(c,0,0,0,"twp_ox_world","twp_oy_world","twp_oz_world",20)
+arrow = Translate([arrow], machine_zero_x, 0, machine_zero_z)
+
 model = Collection([
         machine_axes,
         spindle_xz,
         table,
         base,
+        arrow,
+        #Box(None,"joint.1.pos-fb",0,0,100,100,-100),
+        #Sphere(0,0,0,5)
         #HalLine(-100,100,100,-1000,-1000,1000,50),
         #ArrowOriented(0,0,0,-1000,-1000,1000,50)
-        #CylinderOriented(-100,100,100,-1000,-1000,1000,50),
-        #ArrowOriented(0,0,0,-1000,-1000,1000,50)
+        #CylinderOriented(None,"joint.1.pos-fb",100,100,-1000,-1000,1000,50),
+        #ArrowOriented(c,0,0,0,"twp_ox_world","twp_oy_world","twp_oz_world",20)
         ])
 
 #hud
@@ -280,7 +286,7 @@ myhud.add_pin("Zy: {:8.3f}","vtk-dmu-160-p-gui.twp_zy")
 myhud.add_pin("Zz: {:8.3f}","vtk-dmu-160-p-gui.twp_zz")
 myhud.show_tag_eq_pin_offs("motion.switchkins-type")
 
-myhud2= Hud(None,"motion.switchkins-type",2,"tomato", 0.4)
+myhud2= Hud(None,"motion.switchkins-type",2,"tomato", 0.4) # This is displayed when kintype is 2
 myhud2.add_txt("")
 myhud2.add_txt("")
 myhud2.add_txt("")
