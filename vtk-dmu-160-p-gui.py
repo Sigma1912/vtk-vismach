@@ -24,18 +24,6 @@ except Exception as detail:
 #for setting in sys.argv[1:]: exec(setting)
 
 c = hal.component("vtk-dmu-160-p-gui")
-# axis_x
-c.newpin("axis_x", hal.HAL_FLOAT, hal.HAL_IN)
-# axis_y
-c.newpin("axis_y", hal.HAL_FLOAT, hal.HAL_IN)
-# head vertical slide
-c.newpin("axis_z", hal.HAL_FLOAT, hal.HAL_IN)
-# rotary_a
-c.newpin("rotary_a", hal.HAL_FLOAT, hal.HAL_IN)
-# rotary_b
-c.newpin("rotary_b", hal.HAL_FLOAT, hal.HAL_IN)
-# rotary_c
-c.newpin("rotary_c", hal.HAL_FLOAT, hal.HAL_IN)
 # nutation-angle
 c.newpin("nutation_angle", hal.HAL_FLOAT, hal.HAL_IN)
 # tool offsets
@@ -117,7 +105,10 @@ class HalNutate(Collection):
         self.scale = scale
 
     def update(self):
-        th = self.scale * self.comp[self.var]
+        for v in ['var']:
+            # create variable from list and update from class variables of the same name
+            globals()[v] = update_passed_args(self, v)
+        th = self.scale * var
         x = 0
         y = sin(radians(c.nutation_angle))
         z = cos(radians(c.nutation_angle))
@@ -154,7 +145,7 @@ tool = Collection([
                     tool_shape
                     ])
 tool = HalRotate([tool],c,"virtual_rotation",1,0,0,1)
-tool = HalTranslate([tool],c,"tool_length",0,0,-1)
+tool = HalTranslate([tool],None,"motion.tooloffset.z",0,0,-1)
 tool = HalVectorTranslate([tool],c,0,"pivot_y","pivot_z",-1)
 tool = Color([tool],(1,0,1),1)
 # create spindle head
@@ -172,8 +163,7 @@ spindle_assembly = Collection([
                    ])
 
 # create HAL-link for b-axis rotational joint"
-#spindle_assembly = HalRotate([spindle_assembly],c,"rotary_b",1,0,-1,0)
-spindle_assembly = HalNutate([spindle_assembly],c,"rotary_b",1,0,-1,0)
+spindle_assembly = HalNutate([spindle_assembly],None,"joint.3.pos-fb",1,0,-1,0)
 # Z carriage
 EGO_Z = Color([EGO_Z],(1,0.5,0),1)
 EGO_Z=Translate([EGO_Z], 0, 0, -759.5)
@@ -184,7 +174,7 @@ spindle_z = Collection([
 # move by the values set for the pivot lengths so the vismach origin is in the center of the spindle nose
 spindle_z = HalVectorTranslate([spindle_z],c,0,"pivot_y","pivot_z")
 # spindle head and z-slide move with z
-spindle_z = HalTranslate([spindle_z],c,"axis_z",0,0,1)
+spindle_z = HalTranslate([spindle_z],None,"joint.2.pos-fb",0,0,1)
 # move spindle_z to z-home position
 spindle_z = Translate([spindle_z], 0, 0, machine_zero_z)
 # x carriage
@@ -194,7 +184,7 @@ spindle_xz = Collection([
              EGO_X
              ])
 # spindle head, z-slide and x-slide move with x
-spindle_xz = HalTranslate([spindle_xz],c,"axis_x",1,0,0)
+spindle_xz = HalTranslate([spindle_xz],None,"joint.0.pos-fb",1,0,0)
 # move spindle_xz to x-home position
 spindle_xz = Translate([spindle_xz], machine_zero_x, 0, 0)
 # end toolside
@@ -248,7 +238,7 @@ rotary_table_c = Collection([
                  work
                  ])
 # Rotary table and work roatae with axis C"
-rotary_table_c = HalRotate([rotary_table_c],c,"rotary_c",1,0,0,-1)
+rotary_table_c = HalRotate([rotary_table_c],None,"joint.4.pos-fb",1,0,0,-1)
 # y-carriage that carries the rotary table
 EGO_Y = Color([EGO_Y],(0.2,0.2,0.2),1)
 table = Collection([
@@ -256,7 +246,8 @@ table = Collection([
         EGO_Y
         ])
 # Table moves with y axis
-table = HalTranslate([table],c,"axis_y",0,-1,0)
+#table = HalTranslate([table],c,"axis_y",0,-1,0)
+table = HalTranslate([table],None,"joint.1.pos-fb",0,-1,0)
 # move table to y-home position
 table = Translate([table], 0, -machine_zero_y, 0)
 #/work-side
@@ -268,7 +259,9 @@ model = Collection([
         machine_axes,
         spindle_xz,
         table,
-        base
+        base,
+        #HalLine(-100,100,100,-1000,-1000,1000,50),
+        #ArrowOriented(0,0,0,-1000,-1000,1000,50)
         #CylinderOriented(-100,100,100,-1000,-1000,1000,50),
         #ArrowOriented(0,0,0,-1000,-1000,1000,50)
         ])

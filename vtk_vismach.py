@@ -11,10 +11,29 @@ from PyQt5 import Qt
 from PyQt5.QtCore import QTimer
 
 
+def update_passed_args(self, v):
+    if isinstance(getattr(self,v), str):
+        # class variable of the same name is a string (ie a pinname)
+        halpin = getattr(self,v)
+        if self.comp:
+            # if the component has been passed then we need to get the value using that
+            var = self.comp[halpin]
+        else:
+            # if the comp variable is None then we need to get the value through hal
+            var = hal.get_value(halpin)
+    else:
+        # class variable of the same name is not a string (ie a constant value)
+        var = getattr(self,v)
+    return var
+
+
 class CoordsBase(vtk.vtkActor):
     def __init__(self, *args):
         if args and isinstance(args[0], hal.component):
            self.comp = args[0]
+           args = args[1:]
+        elif args and args[0] == None:
+           self.comp = None
            args = args[1:]
         else:
            self.comp = None
@@ -26,8 +45,12 @@ class CoordsBase(vtk.vtkActor):
         return list(map(self._coord, self._coords))
 
     def _coord(self, v):
-        if isinstance(v, str): return self.comp[v]
-        return v
+        if isinstance(v, str) and self.comp:
+            return self.comp[v]
+        elif isinstance(v, str) and not self.comp:
+            return hal.get_value(v)
+        else:
+            return v
 
 
 # specify the width in X and Y, and the height in Z
@@ -246,7 +269,10 @@ class HalReadPolyData(vtk.vtkActor):
         self.SetUserTransform(vtk.vtkTransform())
 
     def update(self):
-        self.tool_nr = self.comp[self.var]
+        for v in ['var']:
+            # create variable from list and update from class variables of the same name
+            globals()[v] = update_passed_args(self, v)
+        self.tool_nr = var
         self.filename = self.directory + str(self.tool_nr) + ".stl"
         # Create a mapper
         mapper = vtk.vtkPolyDataMapper()
@@ -316,6 +342,7 @@ class Plotter(vtk.vtkActor):
         y = plot_transform.GetMatrix().GetElement(1,3)
         z = plot_transform.GetMatrix().GetElement(2,3)
         current_position = (x, y, z)
+        clear = self.comp[self.clear] if self.comp else hal.get_value(self.clear)
         if self.comp[self.clear] or self.initial_run:
             self.points.Reset()
             self.setup_points([x,y,z])
@@ -350,7 +377,7 @@ class Capture(vtk.vtkActor):
 
 # draw a line from point_1 to point_2, thickness is optional (defaults to 5)
 class HalLine(vtk.vtkActor):
-    def __init__(self, comp, x1var, y1var, z1var, x2var, y2var, z2var, stretch=1, r=5):
+    def __init__(self, comp, x1var, y1var, z1var, x2var, y2var, z2var, stretch=1, r=1):
         self.SetUserTransform(vtk.vtkTransform())
         self.comp = comp
         self.x1var = x1var
@@ -361,18 +388,8 @@ class HalLine(vtk.vtkActor):
         self.z2var = z2var
         self.stretch = stretch
         self.r = r
-        # create the two sets of point coordinates
-        x1 = 0 if self.x1var == 0 else self.comp[self.x1var]
-        y1 = 0 if self.y1var == 0 else self.comp[self.y1var]
-        z1 = 0 if self.z1var == 0 else self.comp[self.z1var]
-        if self.stretch < 0:
-            x2 = 0 if self.x2var == 0 else -self.comp[self.x2var]
-            y2 = 0 if self.y2var == 0 else -self.comp[self.y2var]
-            z2 = 0 if self.z2var == 0 else -self.comp[self.z2var]
-        else:
-            x2 = 0 if self.x2var == 0 else self.comp[self.x2var]
-            y2 = 0 if self.y2var == 0 else self.comp[self.y2var]
-            z2 = 0 if self.z2var == 0 else self.comp[self.z2var]
+        # we initialize with both points (0,0,0) and get the actual values in the update loop
+        (x1,y1,z1) = (x2,y2,z2) = (0,0,0)
         # create the line
         self.lineSource = vtk.vtkLineSource()
         self.lineSource.SetPoint1(x1,y1,z1)
@@ -387,19 +404,12 @@ class HalLine(vtk.vtkActor):
 
     def update(self):
         # update the two points, P0 and P1
-        x1 = 0 if self.x1var == 0 else self.comp[self.x1var]
-        y1 = 0 if self.y1var == 0 else self.comp[self.y1var]
-        z1 = 0 if self.z1var == 0 else self.comp[self.z1var]
-        if self.stretch < 0:
-            x2 = 0 if self.x2var == 0 else -self.comp[self.x2var]
-            y2 = 0 if self.y2var == 0 else -self.comp[self.y2var]
-            z2 = 0 if self.z2var == 0 else -self.comp[self.z2var]
-        else:
-            x2 = 0 if self.x2var == 0 else self.comp[self.x2var]
-            y2 = 0 if self.y2var == 0 else self.comp[self.y2var]
-            z2 = 0 if self.z2var == 0 else self.comp[self.z2var]
-        self.lineSource.SetPoint1(x1,y1,z1)
-        self.lineSource.SetPoint2(x2,y2,z2)
+        for v in ['x1var','y1var','z1var','x2var','y2var','z2var']:
+            # create variable from list and update from class variables of the same name
+            globals()[v] = update_passed_args(self, v)
+        s = self.stretch
+        self.lineSource.SetPoint1(x1var,y1var,z1var)
+        self.lineSource.SetPoint2(s*x2var,s*y2var,s*z2var)
 
 
 # Create a trihedron indicating coordinate orientation
@@ -472,20 +482,11 @@ class HalGridFromNormalAndDirection(vtk.vtkAssembly):
             self.AddPart(line)
 
     def update(self):
-        # check for constants in the arguments
-        ox = self.ox if not isinstance(self.ox, str) else self.comp[self.ox]
-        oy = self.oy if not isinstance(self.oy, str) else self.comp[self.oy]
-        oz = self.oz if not isinstance(self.oz, str) else self.comp[self.oz]
-        xx = self.xx if not isinstance(self.xx, str) else self.comp[self.xx]
-        xy = self.xy if not isinstance(self.xy, str) else self.comp[self.xy]
-        xz = self.xz if not isinstance(self.xz, str) else self.comp[self.xz]
-        zx = self.zx if not isinstance(self.zx, str) else self.comp[self.zx]
-        zy = self.zy if not isinstance(self.zy, str) else self.comp[self.zy]
-        zz = self.zz if not isinstance(self.zz, str) else self.comp[self.zz]
+        # create variables and get values (either 'self.var', 'self.comp[self.var]' or 'hal.get_value(var)')
+        for v in ['ox','oy','oz','xx','xy','xz','zx','zy','zz','s_ox','s_oy','s_oz',]:
+            # create variable from list and update from class variables of the same name
+            globals()[v] = update_passed_args(self, v)
         s = self.s
-        s_ox = self.s_ox
-        s_oy = self.s_oy
-        s_oz = self.s_oz
         vo = [ox, oy, oz]
         vx = [xx, xy, xz]
         vz = [zx, zy, zz]
@@ -537,16 +538,10 @@ class HalCoordsFromNormalAndDirection(vtk.vtkAxesActor):
         self.SetScale(scale,scale,scale)
 
     def update(self):
-        # check for constants in the arguments
-        ox = self.ox if not isinstance(self.ox, str) else self.comp[self.ox]
-        oy = self.oy if not isinstance(self.oy, str) else self.comp[self.oy]
-        oz = self.oz if not isinstance(self.oz, str) else self.comp[self.oz]
-        xx = self.xx if not isinstance(self.xx, str) else self.comp[self.xx]
-        xy = self.xy if not isinstance(self.xy, str) else self.comp[self.xy]
-        xz = self.xz if not isinstance(self.xz, str) else self.comp[self.xz]
-        zx = self.zx if not isinstance(self.zx, str) else self.comp[self.zx]
-        zy = self.zy if not isinstance(self.zy, str) else self.comp[self.zy]
-        zz = self.zz if not isinstance(self.zz, str) else self.comp[self.zz]
+        # create variables and get values (either 'self.var', 'self.comp[self.var]' or 'hal.get_value(var)')
+        for v in ['ox','oy','oz','xx','xy','xz','zx','zy','zz','s_ox','s_oy','s_oz']:
+            # create variable from list and update from class variables of the same name
+            globals()[v] = update_passed_args(self, v)
         s_ox = self.s_ox
         s_oy = self.s_oy
         s_oz = self.s_oz
@@ -559,7 +554,6 @@ class HalCoordsFromNormalAndDirection(vtk.vtkAxesActor):
                   [ xy, yy, zy, oy*s_oy],
                   [ xz, yz, zz, oz*s_oz],
                   [  0,  0,  0,       1]]
-
         transform_matrix = vtk.vtkMatrix4x4()
         for column in range (0,4):
             for row in range (0,4):
@@ -613,27 +607,6 @@ class Color(Collection):
             find_actors(part)
 
 
-class HalColor(Collection):
-    def __init__(self, parts, color, opacity, comp, const, var, color_true=1, color_false=0):
-        super().__init__(parts)
-        self.color = color # either name string (eg "red","magenta") or normalized RGB as tuple (eg (0.7,0.7,0.1))
-        self.opacity = opacity
-        self.comp = comp
-        if isinstance(const, list):
-             self.const = const
-        else:
-             self.const = [const]
-        self.var = var
-        self.color_true = color_true
-        self.color_false = color_false
-
-    def update(self):
-        if self.comp[self.var] in self.const:
-            self.SetScale(s_t,s_t,s_t)
-        else:
-            self.SetScale(s_f,s_f,s_f)
-
-
 class Translate(Collection):
     def __init__(self, parts, x, y, z):
         super().__init__(parts)
@@ -654,12 +627,15 @@ class HalTranslate(Collection):
         self.z = z
 
     def update(self):
-        var = self.comp[self.var]
+        for v in ['var']:
+            # create variable from list and update from class variables of the same name
+            globals()[v] = update_passed_args(self, v)
         self.transformation = vtk.vtkTransform()
         self.transformation.Translate(var*self.x, var*self.y, var*self.z)
 
     def transform(self):
         self.SetUserTransform(self.transformation)
+
 
 
 # translates an object using a variable translation vector, use scale=-1 to change direction
@@ -673,10 +649,9 @@ class HalVectorTranslate(Collection):
         self.scale  = scale
 
     def update(self):
-        # check for constants in the arguments
-        xvar = self.xvar if not isinstance(self.xvar, str) else self.comp[self.xvar]
-        yvar = self.yvar if not isinstance(self.yvar, str) else self.comp[self.yvar]
-        zvar = self.zvar if not isinstance(self.zvar, str) else self.comp[self.zvar]
+        for v in ['xvar','yvar','zvar']:
+            # create variable from list and update from class variables of the same name
+            globals()[v] = update_passed_args(self, v)
         self.transformation = vtk.vtkTransform()
         self.transformation.Translate(self.scale*xvar, self.scale*yvar, self.scale*zvar)
 
@@ -707,10 +682,13 @@ class HalRotate(Collection):
         self.z = z
 
     def update(self):
-        self.th = self.scale * self.comp[self.var]
+        for v in ['var']:
+            # create variable from list and update from class variables of the same name
+            globals()[v] = update_passed_args(self, v)
+        th = self.scale * var
         self.transformation  = vtk.vtkTransform()
         self.transformation.PreMultiply()
-        self.transformation.RotateWXYZ(self.th,self.x, self.y, self.z)
+        self.transformation.RotateWXYZ(th,self.x, self.y, self.z)
 
     def transform(self):
         self.SetUserTransform(self.transformation)
@@ -725,15 +703,15 @@ class HalEulerRotate(Collection):
         self.th1 = th1
         self.th2 = th2
         self.th3 = th3
-        self.var = (self.comp[self.th1], self.comp[self.th2], self.comp[self.th3])
 
     def update(self):
-        var = (self.comp[self.th1], self.comp[self.th2], self.comp[self.th3])
+        for v in ['order','th1','th2','th3']:
+            # create variable from list and update from class variables of the same name
+            globals()[v] = update_passed_args(self, v)
         try:
             order = str(int(self.comp[self.order]))
         except:
             order = str(int(self.order))
-        th1, th2, th3 = var[0], var[1], var[2]
         if order == '131':
             rotation1 = (th1, 1, 0, 0)
             rotation2 = (th2, 0, 0, 1)
@@ -806,7 +784,10 @@ class HalShow(Collection):
     def update(self):
         s_t = self.scaleby_true
         s_f = self.scaleby_false
-        if self.comp[self.var] in self.const:
+        for v in ['var']:
+            # create variable from list and update from class variables of the same name
+            globals()[v] = update_passed_args(self, v)
+        if var in self.const:
             self.SetScale(s_t,s_t,s_t)
         else:
             self.SetScale(s_f,s_f,s_f)
