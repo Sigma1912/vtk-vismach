@@ -409,11 +409,11 @@ class Plotter(vtk.vtkActor):
 
     def update(self):
         tool2world = vtk.vtkTransform()
-        tool2world.Concatenate(self.tooltip.matrix)
+        tool2world.Concatenate(self.tooltip.current_matrix)
         #world2tool = vtk.vtkTransform()
         #world2tool = tool2world.GetInverse()
         work2world = vtk.vtkTransform()
-        work2world.Concatenate(self.work.matrix)
+        work2world.Concatenate(self.work.current_matrix)
         world2work = vtk.vtkTransform()
         world2work = work2world.GetInverse()
         plot_transform = vtk.vtkTransform()
@@ -448,11 +448,11 @@ class Plotter(vtk.vtkActor):
 class Capture(vtk.vtkActor):
     def __init__(self):
         self.SetUserTransform(vtk.vtkTransform())
-        self.matrix = self.GetMatrix()
+        self.current_matrix = self.GetMatrix()
         self.tracked_parts = [self]
 
     def update(self):
-        self.matrix = self.GetMatrix()            # store the total transformation from this cycle
+        self.current_matrix = self.GetMatrix()            # store the total transformation from this cycle
         self.SetUserTransform(vtk.vtkTransform()) # reset tranform for next update cycle
 
 
@@ -727,14 +727,14 @@ class HalVectorTranslate(Collection):
         self.xvar = xvar
         self.yvar = yvar
         self.zvar = zvar
-        self.scale  = scale
+        self.current_scale  = scale
 
     def update(self):
         for v in ['xvar','yvar','zvar']:
             # create variable from list and update from class variables of the same name
             globals()[v] = update_passed_args(self, v)
         self.transformation = vtk.vtkTransform()
-        self.transformation.Translate(self.scale*xvar, self.scale*yvar, self.scale*zvar)
+        self.transformation.Translate(self.current_scale*xvar, self.current_scale*yvar, self.current_scale*zvar)
 
     def transform(self):
         self.SetUserTransform(self.transformation)
@@ -757,7 +757,7 @@ class HalRotate(Collection):
         self.SetUserTransform(vtk.vtkTransform())
         self.comp = comp
         self.var = var
-        self.scale = scale
+        self.current_scale = scale
         self.x = x
         self.y = y
         self.z = z
@@ -766,7 +766,7 @@ class HalRotate(Collection):
         for v in ['var']:
             # create variable from list and update from class variables of the same name
             globals()[v] = update_passed_args(self, v)
-        th = self.scale * var
+        th = self.current_scale * var
         self.transformation  = vtk.vtkTransform()
         self.transformation.PreMultiply()
         self.transformation.RotateWXYZ(th,self.x, self.y, self.z)
@@ -859,12 +859,12 @@ class HalShow(Collection):
         else:
              self.const = [const]
         self.var = var
-        self.scaleby_true = scaleby_true
-        self.scaleby_false = scaleby_false
+        self.current_scaleby_true = scaleby_true
+        self.current_scaleby_false = scaleby_false
 
     def update(self):
-        s_t = self.scaleby_true
-        s_f = self.scaleby_false
+        s_t = self.current_scaleby_true
+        s_f = self.current_scaleby_false
         for v in ['var']:
             # create variable from list and update from class variables of the same name
             globals()[v] = update_passed_args(self, v)

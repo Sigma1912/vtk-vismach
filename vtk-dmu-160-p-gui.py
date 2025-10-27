@@ -96,13 +96,13 @@ class HalNutate(Collection):
         super().__init__(parts)
         self.comp = comp
         self.var = var
-        self.scale = scale
+        self.current_scale = scale
 
     def update(self):
         for v in ['var']:
             # create variable from list and update from class variables of the same name
             globals()[v] = update_passed_args(self, v)
-        th = self.scale * var
+        th = self.current_scale * var
         x = 0
         y = sin(radians(c.nutation_angle))
         z = cos(radians(c.nutation_angle))
