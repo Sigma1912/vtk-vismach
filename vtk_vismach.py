@@ -79,6 +79,28 @@ class CoordsBase(vtk.vtkActor):
         else:
             return s*v
 
+class CoordsBase_assy(vtk.vtkAssembly):
+    def __init__(self, *args):
+        parse_arguments(self, args)
+        self.create()
+
+    def coords(self):
+        return list(map(self._coord, self._coords))
+
+    def _coord(self, v):
+        s = 1 # default scale factor
+        if isinstance(v,tuple):
+            # tuple syntax has been used, ie (<halpin_name>, scalefactor)
+            tup = v
+            v = tup[0]
+            s = tup[1]
+        if isinstance(v, str) and isinstance(self.comp, hal.component):
+            return s*self.comp[v]
+        elif isinstance(v, str) and isinstance(self.comp,type(hal)):
+            return s*hal.get_value(v)
+        else:
+            return s*v
+
 
 class Box(CoordsBase):
     def get_info(self):
@@ -531,24 +553,14 @@ class Axes(vtk.vtkAxesActor):
 
 # draw a grid defined by it's normal vector(zx,zy,zz) and x-direction vector(xx, xy, xz)
 # optional s to define the half-width from the origin (ox,oy,oz)
-class HalGridFromNormalAndDirection(vtk.vtkAssembly):
-    def __init__(self, comp, origin, vector_x, vector_z, s=100, r=2, scale_origin=(1,1,1)):
+class HalGridFromNormalAndDirection(CoordsBase_assy):
+    def get_info(self):
+        return ('ox','oy','oz','xx','xy','xz','zx','zy','zz','s')
+
+    def create (self):
         self.SetUserTransform(vtk.vtkTransform())
-        self.comp = comp
-        self.ox = origin[0]
-        self.oy = origin[1]
-        self.oz = origin[2]
-        self.xx = vector_x[0]
-        self.xy = vector_x[1]
-        self.xz = vector_x[2]
-        self.zx = vector_z[0]
-        self.zy = vector_z[1]
-        self.zz = vector_z[2]
-        self.s = s
-        self.r = r
-        self.s_ox  = scale_origin[0]
-        self.s_oy  = scale_origin[1]
-        self.s_oz  = scale_origin[2]
+        ox, oy, oz, xx, xy, xz, zx, zy, zz, self.s = self.coords()
+        self.r = 1
         self.grid()
 
     def cross(self, a, b):
@@ -586,19 +598,15 @@ class HalGridFromNormalAndDirection(vtk.vtkAssembly):
             self.AddPart(line)
 
     def update(self):
-        # create variables and get values (either 'self.var', 'self.comp[self.var]' or 'hal.get_value(var)')
-        for v in ['ox','oy','oz','xx','xy','xz','zx','zy','zz','s_ox','s_oy','s_oz',]:
-            # create variable from list and update from class variables of the same name
-            globals()[v] = update_passed_args(self, v)
-        s = self.s
+        ox, oy, oz, xx, xy, xz, zx, zy, zz, self.s = self.coords()
         vo = [ox, oy, oz]
         vx = [xx, xy, xz]
         vz = [zx, zy, zz]
         # calculate the missing y vector
         vy = [yx, yy, yz] = self.cross(vz,vx)
-        matrix = [[ xx, yx, zx, ox*s_ox],
-                  [ xy, yy, zy, oy*s_oy],
-                  [ xz, yz, zz, oz*s_oz],
+        matrix = [[ xx, yx, zx, ox],
+                  [ xy, yy, zy, oy],
+                  [ xz, yz, zz, oz],
                   [  0,  0,  0,       1]]
         transform_matrix = vtk.vtkMatrix4x4()
         for column in range (0,4):
@@ -609,55 +617,36 @@ class HalGridFromNormalAndDirection(vtk.vtkAssembly):
 
 # draw a coordinate system defined by it's normal vector(zx,zy,zz) and x-direction vector(xx, xy, xz)
 # optional r to define the thickness of the cylinders
-class HalCoordsFromNormalAndDirection(vtk.vtkAxesActor):
-    def __init__(self, comp, origin, vector_x, vector_z,
-                 scale=100, radius_factor=0.5, scale_origin=(1,1,1), label_prefix=""):
-        self.SetUserTransform(vtk.vtkTransform())
-        self.comp = comp
-        self.ox = origin[0]
-        self.oy = origin[1]
-        self.oz = origin[2]
-        self.xx = vector_x[0]
-        self.xy = vector_x[1]
-        self.xz = vector_x[2]
-        self.zx = vector_z[0]
-        self.zy = vector_z[1]
-        self.zz = vector_z[2]
-        self.s_ox  = scale_origin[0]
-        self.s_oy  = scale_origin[1]
-        self.s_oz  = scale_origin[2]
-        self.create_axes(scale,radius_factor,label_prefix)
+class HalCoordsFromNormalAndDirection(CoordsBase_assy):
+    def get_info(self):
+        return ('ox','oy','oz','xx','xy','xz','zx','zy','zz','scale')
 
     def cross(self, a, b):
         return [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]]
 
-    def create_axes(self, scale=50, radius_factor=0.5, label_prefix="", label_x="X", label_y="Y", label_z="Z",):
+    def create(self):
+        ox, oy, oz, xx, xy, xz, zx, zy, zz, self.scale_factor = self.coords()
+        self.radius_factor = 0.5
+        # Create arrow (arrows are created along the X axis by default)
+        self.axes = vtk.vtkAxesActor()
+        self.axes.SetShaftTypeToCylinder()
+        self.axes.SetCylinderRadius(self.radius_factor*self.axes.GetCylinderRadius())
+        self.axes.SetConeRadius(self.radius_factor*self.axes.GetConeRadius())
+        self.axes.SetScale(self.scale_factor, self.scale_factor, self.scale_factor)
+        self.AddPart(self.axes)
         self.SetUserTransform(vtk.vtkTransform())
-        self.SetXAxisLabelText(label_prefix + label_x) #FIXME axis labels not showing (seems to be a bug in vtk)
-        self.SetYAxisLabelText(label_prefix + label_y)
-        self.SetZAxisLabelText(label_prefix + label_z)
-        self.SetShaftTypeToCylinder()
-        self.SetCylinderRadius(radius_factor*self.GetCylinderRadius())
-        self.SetConeRadius(radius_factor*self.GetConeRadius())
-        self.SetScale(scale,scale,scale)
 
     def update(self):
-        # create variables and get values (either 'self.var', 'self.comp[self.var]' or 'hal.get_value(var)')
-        for v in ['ox','oy','oz','xx','xy','xz','zx','zy','zz','s_ox','s_oy','s_oz']:
-            # create variable from list and update from class variables of the same name
-            globals()[v] = update_passed_args(self, v)
-        s_ox = self.s_ox
-        s_oy = self.s_oy
-        s_oz = self.s_oz
+        ox, oy, oz, xx, xy, xz, zx, zy, zz, s = self.coords()
         vo = [ox, oy, oz]
         vx = [xx, xy, xz]
         vz = [zx, zy, zz]
         # calculate the missing y vector
         vy = [yx, yy, yz] = self.cross(vz,vx)
-        matrix = [[ xx, yx, zx, ox*s_ox],
-                  [ xy, yy, zy, oy*s_oy],
-                  [ xz, yz, zz, oz*s_oz],
-                  [  0,  0,  0,       1]]
+        matrix = [[ xx, yx, zx, ox],
+                  [ xy, yy, zy, oy],
+                  [ xz, yz, zz, oz],
+                  [  0,  0,  0,  1]]
         transform_matrix = vtk.vtkMatrix4x4()
         for column in range (0,4):
             for row in range (0,4):

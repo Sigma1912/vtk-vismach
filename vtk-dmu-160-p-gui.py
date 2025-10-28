@@ -172,29 +172,30 @@ work = Capture()
 work_axes = Axes(scale=100)
 # Create an indicator for the defined Tilted Work Plane (TWP)
 work_plane_defined =  HalGridFromNormalAndDirection(c,
-        ["twp_ox", "twp_oy", "twp_oz"],
-        ["twp_xx", "twp_xy", "twp_xz"],
-        ["twp_zx", "twp_zy", "twp_zz"],
-        s=300
+        "twp_ox", "twp_oy", "twp_oz",
+        "twp_xx", "twp_xy", "twp_xz",
+        "twp_zx", "twp_zy", "twp_zz",
+        300
         )
 # for twp-defined = true, we show the plane in gray
 work_plane_defined = Color([work_plane_defined],(0.7,0.7,0.7),0.3)
 work_plane_defined = HalShow([work_plane_defined],c,0,"twp_active")
 # Create an indicator for the active Tilted Work Plane (TWP), same as active but with different color
 work_plane_active =  HalGridFromNormalAndDirection(c,
-        ["twp_ox", "twp_oy", "twp_oz"],
-        ["twp_xx", "twp_xy", "twp_xz"],
-        ["twp_zx", "twp_zy", "twp_zz"],
-        s=300
+        "twp_ox", "twp_oy", "twp_oz",
+        "twp_xx", "twp_xy", "twp_xz",
+        "twp_zx", "twp_zy", "twp_zz",
+        300
         )
 # for twp-active = true, we show the plane in pink
 work_plane_active = Color([work_plane_active],(1,0,1),0.3)
 work_plane_active = HalShow([work_plane_active],c,1,"twp_active")
 # Create a coordinate system for the twp-plane
 work_plane_coords =  HalCoordsFromNormalAndDirection(c,
-        ["twp_ox", "twp_oy", "twp_oz"],
-        ["twp_xx", "twp_xy", "twp_xz"],
-        ["twp_zx", "twp_zy", "twp_zz"]
+        "twp_ox", "twp_oy", "twp_oz",
+        "twp_xx", "twp_xy", "twp_xz",
+        "twp_zx", "twp_zy", "twp_zz",
+        300
         )
 work_plane = Collection([work_plane_defined, work_plane_active, work_plane_coords])
 # make the work_plane hidable
