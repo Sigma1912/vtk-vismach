@@ -15,12 +15,14 @@ def update_passed_args(self, v):
     if isinstance(getattr(self,v), str):
         # class variable of the same name is a string (ie a pinname)
         halpin = getattr(self,v)
-        if self.comp:
+        if isinstance(self.comp, hal.component):
             # if the component has been passed then we need to get the value using that
             var = self.comp[halpin]
-        else:
+        elif isinstance(self.comp,type(hal)):
             # if the comp variable is None then we need to get the value through hal
             var = hal.get_value(halpin)
+        else:
+            print("Error: Unrecognized module ", self.comp)
     else:
         # class variable of the same name is not a string (ie a constant value)
         var = getattr(self,v)
@@ -32,7 +34,7 @@ class CoordsBase(vtk.vtkActor):
         if args and isinstance(args[0], hal.component):
             self.comp = args[0]
             args = args[1:]
-        elif args and args[0] == None:
+        elif args and isinstance(args[0],type(hal)):
             self.comp = None
             args = args[1:]
         else:
@@ -45,9 +47,9 @@ class CoordsBase(vtk.vtkActor):
         return list(map(self._coord, self._coords))
 
     def _coord(self, v):
-        if isinstance(v, str) and self.comp:
+        if isinstance(v, str) and isinstance(self.comp, hal.component):
             return self.comp[v]
-        elif isinstance(v, str) and not self.comp:
+        elif isinstance(v, str) and isinstance(self.comp,type(hal)):
             return hal.get_value(v)
         else:
             return v
@@ -880,8 +882,6 @@ class Hud(vtk.vtkActor2D):
     def __init__(self, comp, var, const, color, opacity=1, font_size=20, line_spacing=1):
         self.comp = comp
         self.var = var
-        print("init self.comp, ", self.var)
-        print("init self.var, ", self.var)
         self.const = const
         self.strs = []
         self.hud_lines = []
@@ -928,13 +928,15 @@ class Hud(vtk.vtkActor2D):
 
     # update the lines in the hud using the lists created above
     def update(self):
-        print("self.comp, ", self.var)
-        print("self.var, ", self.var)
-        for v in ['var']:
-            # create variable from list and update from class variables of the same name
-            globals()[v] = update_passed_args(self, v)
+        if isinstance(self.comp, hal.component):
+            # if the component has been passed then we need to get the value using that
+            var = self.comp[self.var]
+        elif isinstance(self.comp,type(hal)):
+            # if the comp variable is None then we need to get the value through hal
+            var = hal.get_value(self.var)
+        else:
+            var = self.var
         hide_hud = 0 if var == self.const else 1
-
         strs = []
         show_list = [None]
         # check if hud should be hidden
@@ -942,7 +944,7 @@ class Hud(vtk.vtkActor2D):
             comp = a[0]
             pin = a[1]
             const = a[2]
-            var = hal.get_value(pin) if comp == None else comp[pin]
+            var = hal.get_value(pin) if isinstance(comp,type(hal)) else comp[pin]
             if  var == const:
                 hide_hud = 1
         if hide_hud == 0:
@@ -953,10 +955,10 @@ class Hud(vtk.vtkActor2D):
                 pin  = b[2]
                 val_offs = b[3]
                 if tags == None: # show_tag_eq_pin_offs
-                    var = hal.get_value(pin) if comp == None else comp[pin]
+                    var = hal.get_value(pin) if isinstance(comp,type(hal)) else comp[pin]
                     tag = int(var + val_offs)
                 else: # show_tags_if_pin_eq_val
-                    var = hal.get_value(pin) if comp == None else comp[pin]
+                    var = hal.get_value(pin) if isinstance(comp,type(hal)) else comp[pin]
                     if  var == val_offs:
                         tag = tags
                 if not isinstance(tag, list):
@@ -974,7 +976,7 @@ class Hud(vtk.vtkActor2D):
                     if comp == None and pin == None: # txt
                         strs += [text]
                     else: # pin
-                        var = hal.get_value(pin) if comp == None else comp[pin]
+                        var = hal.get_value(pin) if isinstance(comp,type(hal)) else comp[pin]
                         strs += [text.format(var)]
         combined_string = ""
         for string in strs:
@@ -1086,7 +1088,7 @@ def main(comp,
     # Set up a Qt timer to create update events
     timer = QTimer()
     timer.timeout.connect(update)
-    timer.start(10000)
+    timer.start(100)
     # Show Qt window
     mainWindow.show()
     app.exec_()

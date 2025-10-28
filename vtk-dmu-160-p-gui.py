@@ -79,7 +79,6 @@ c.newpin("rot_th2", hal.HAL_FLOAT, hal.HAL_IN)
 c.newpin("rot_th3", hal.HAL_FLOAT, hal.HAL_IN)
 c.ready()
 
-
 # create cylinder using current tool length and diameter
 class HalToolCylinder(CylinderZ):
     def __init__(self, comp, *args):
@@ -139,7 +138,7 @@ tool = Collection([
                     tool_shape
                     ])
 tool = HalRotate([tool],c,"virtual_rotation",1,0,0,1)
-tool = HalTranslate([tool],None,"motion.tooloffset.z",0,0,-1)
+tool = HalTranslate([tool],hal,"motion.tooloffset.z",0,0,-1)
 tool = HalVectorTranslate([tool],c,0,"pivot_y","pivot_z",-1)
 tool = Color([tool],(1,0,1),1)
 # create spindle head
@@ -157,7 +156,7 @@ spindle_assembly = Collection([
                    ])
 
 # create HAL-link for b-axis rotational joint"
-spindle_assembly = HalNutate([spindle_assembly],None,"joint.3.pos-fb",1,0,-1,0)
+spindle_assembly = HalNutate([spindle_assembly],hal,"joint.3.pos-fb",1,0,-1,0)
 # Z carriage
 EGO_Z = Color([EGO_Z],(1,0.5,0),1)
 EGO_Z=Translate([EGO_Z], 0, 0, -759.5)
@@ -168,7 +167,7 @@ spindle_z = Collection([
 # move by the values set for the pivot lengths so the vismach origin is in the center of the spindle nose
 spindle_z = HalVectorTranslate([spindle_z],c,0,"pivot_y","pivot_z")
 # spindle head and z-slide move with z
-spindle_z = HalTranslate([spindle_z],None,"joint.2.pos-fb",0,0,1)
+spindle_z = HalTranslate([spindle_z],hal,"joint.2.pos-fb",0,0,1)
 # move spindle_z to z-home position
 spindle_z = Translate([spindle_z], 0, 0, machine_zero_z)
 # x carriage
@@ -178,7 +177,7 @@ spindle_xz = Collection([
              EGO_X
              ])
 # spindle head, z-slide and x-slide move with x
-spindle_xz = HalTranslate([spindle_xz],None,"joint.0.pos-fb",1,0,0)
+spindle_xz = HalTranslate([spindle_xz],hal,"joint.0.pos-fb",1,0,0)
 # move spindle_xz to x-home position
 spindle_xz = Translate([spindle_xz], machine_zero_x, 0, 0)
 # end toolside
@@ -232,7 +231,7 @@ rotary_table_c = Collection([
                  work
                  ])
 # Rotary table and work roatae with axis C"
-rotary_table_c = HalRotate([rotary_table_c],None,"joint.4.pos-fb",1,0,0,-1)
+rotary_table_c = HalRotate([rotary_table_c],hal,"joint.4.pos-fb",1,0,0,-1)
 # y-carriage that carries the rotary table
 EGO_Y = Color([EGO_Y],(0.2,0.2,0.2),1)
 table = Collection([
@@ -241,7 +240,7 @@ table = Collection([
         ])
 # Table moves with y axis
 #table = HalTranslate([table],c,"axis_y",0,-1,0)
-table = HalTranslate([table],None,"joint.1.pos-fb",0,-1,0)
+table = HalTranslate([table],hal,"joint.1.pos-fb",0,-1,0)
 # move table to y-home position
 table = Translate([table], 0, -machine_zero_y, 0)
 #/work-side
@@ -258,11 +257,11 @@ model = Collection([
         table,
         base,
         arrow,
-        #Box(None,"joint.1.pos-fb",0,0,100,100,-100),
+        #Box(hal,"joint.1.pos-fb",0,0,100,100,-100),
         #Sphere(0,0,0,5)
         #HalLine(-100,100,100,-1000,-1000,1000,50),
         #ArrowOriented(0,0,0,-1000,-1000,1000,50)
-        #CylinderOriented(None,"joint.1.pos-fb",100,100,-1000,-1000,1000,50),
+        #CylinderOriented(hal,"joint.1.pos-fb",100,100,-1000,-1000,1000,50),
         #ArrowOriented(c,0,0,0,"twp_ox_world","twp_oy_world","twp_oz_world",20)
         ])
 
@@ -284,7 +283,7 @@ myhud.add_txt("TWP-Orientation Vector Z:")
 myhud.add_pin("Zx: {:8.3f}",c,"twp_zx")
 myhud.add_pin("Zy: {:8.3f}",c,"twp_zy")
 myhud.add_pin("Zz: {:8.3f}",c,"twp_zz")
-myhud.show_tag_eq_pin_offs(None,"motion.switchkins-type")
+myhud.show_tag_eq_pin_offs(hal,"motion.switchkins-type")
 
 myhud2= Hud(c,"kinstype_select",2,"tomato", 0.4) # This is displayed when kintype is 2
 myhud2.add_txt("")
@@ -304,4 +303,4 @@ myhud2.add_pin("    {:8.3f}",c,"twp_zz")
 myhud2.extra_text_enable = True
 #/hud
 
-main(c,model, tooltip, work, huds=[myhud], window_width=1400, window_height=1000, window_title = "Vtk_Vismach Tutorial")
+main(c,model, tooltip, work, huds=[myhud,myhud2], window_width=1400, window_height=1000, window_title = "Vtk_Vismach Tutorial")
