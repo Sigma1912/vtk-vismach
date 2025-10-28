@@ -266,7 +266,7 @@ model = Collection([
         ])
 
 #hud
-myhud = Hud(None,True,True,"mint", 0.4) # This will always be displayed
+myhud = Hud(color='mint') # This will always be displayed
 myhud.add_txt("DMU-160-P")
 myhud.add_txt("---------")
 myhud.add_txt("")

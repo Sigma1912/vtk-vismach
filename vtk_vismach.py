@@ -879,7 +879,7 @@ class HalShow(Collection):
 # Create a text overlay (HUD)
 # color can be either name string (eg "red","magenta") or normalized RGB as tuple (eg (0.7,0.7,0.1))
 class Hud(vtk.vtkActor2D):
-    def __init__(self, comp, var, const, color, opacity=1, font_size=20, line_spacing=1):
+    def __init__(self, comp=None, var=True, const=True, color="white", opacity=1, font_size=20, line_spacing=1):
         self.comp = comp
         self.var = var
         self.const = const
