@@ -79,15 +79,6 @@ c.newpin("rot_th2", hal.HAL_FLOAT, hal.HAL_IN)
 c.newpin("rot_th3", hal.HAL_FLOAT, hal.HAL_IN)
 c.ready()
 
-# create cylinder using current tool length and diameter
-class HalToolCylinder(CylinderZ):
-    def __init__(self, comp, *args):
-        super().__init__(self, comp, *args)
-
-    def coords(self):
-        r = hal.get_value('halui.tool.diameter')/2
-        return hal.get_value('motion.tooloffset.z'), r
-
 
 # used to rotate parts around the nutation axis
 class HalNutate(Collection):
@@ -128,7 +119,7 @@ tooltip = Capture()
 # Create an indicator for the tool coordinates
 tool_axes = Axes(scale=100)
 tool_shape = Collection([
-                HalToolCylinder(c),
+                CylinderZ(hal,"motion.tooloffset.z", ('halui.tool.diameter', 0.5)),
                 # this indicates the spindle nose when no tool-offset is active
                 CylinderZ(-0.1, 0),
                 ])
@@ -248,8 +239,8 @@ table = Translate([table], 0, -machine_zero_y, 0)
 # Create machine base
 base = Color([EGO_BC],(0.3,0.3,0.3),1)
 
-arrow = ArrowOriented(c,0,0,0,"twp_ox_world","twp_oy_world","twp_oz_world",20)
-arrow = Translate([arrow], machine_zero_x, 0, machine_zero_z)
+arrow = ArrowOriented(hal, machine_zero_x, 0,-machine_zero_z,0,("vismach.work_pos_y",1),0,50)
+#arrow = Translate([arrow], machine_zero_x, 0, machine_zero_z)
 
 model = Collection([
         machine_axes,
@@ -257,12 +248,12 @@ model = Collection([
         table,
         base,
         arrow,
-        CylinderX(hal,"joint.0.pos-fb",50),
-        Box(hal,"joint.1.pos-fb",0,0,100,100,-100),
+        #CylinderX(hal,"joint.0.pos-fb",50),
+        #Box(hal,"joint.1.pos-fb",0,0,100,100,-100),
         #Sphere(0,0,0,5)
         #HalLine(-100,100,100,-1000,-1000,1000,50),
-        ArrowOriented(hal,0,0,0,-1000,"joint.1.pos-fb",1000,50),
-        CylinderOriented(hal,"joint.1.pos-fb",100,100,-1000,-1000,1000,50),
+        #ArrowOriented(hal,0,0,0,"vismach.work_pos_x","vismach.work_pos_y","vismach.work_pos_z",50),
+        #CylinderOriented(hal,"joint.1.pos-fb",100,100,-1000,-1000,1000,50),
         #ArrowOriented(c,0,0,0,"twp_ox_world","twp_oy_world","twp_oz_world",20)
         ])
 

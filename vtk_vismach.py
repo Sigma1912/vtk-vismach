@@ -12,6 +12,12 @@ from PyQt5.QtCore import QTimer
 
 
 def update_passed_args(self, v):
+    s = 1
+    if isinstance(v,tuple):
+        # tuple syntax has been used, ie (<halpin_name>, scalefactor)
+        tup = v
+        v = tup[0]
+        s = tup[1]
     if isinstance(getattr(self,v), str):
         # class variable of the same name is a string (ie a pinname)
         halpin = getattr(self,v)
@@ -26,7 +32,7 @@ def update_passed_args(self, v):
     else:
         # class variable of the same name is not a string (ie a constant value)
         var = getattr(self,v)
-    return var
+    return s*var
 
 
 class CoordsBase(vtk.vtkActor):
@@ -47,12 +53,19 @@ class CoordsBase(vtk.vtkActor):
         return list(map(self._coord, self._coords))
 
     def _coord(self, v):
+        s=1
+        if isinstance(v,tuple):
+            # tuple syntax has been used, ie (<halpin_name>, scalefactor)
+            tup = v
+            v = tup[0]
+            s = tup[1]
         if isinstance(v, str) and isinstance(self.comp, hal.component):
-            return self.comp[v]
+            return s*self.comp[v]
         elif isinstance(v, str) and isinstance(self.comp,type(hal)):
-            return hal.get_value(v)
+            return s*hal.get_value(v)
         else:
-            return v
+            return s*v
+
 
 
 class Box(CoordsBase):
@@ -65,7 +78,6 @@ class Box(CoordsBase):
         mapper = vtk.vtkPolyDataMapper()
         mapper.SetInputData(self.cube.GetOutput())
         self.SetMapper(mapper)
-        self.update()
 
     def update(self):
         x1, y1, z1, x2, y2, z2 = self.coords()
@@ -244,7 +256,7 @@ class ArrowOriented(CoordsBase):
         self.SetMapper(mapper)
 
     def update(self):
-        xs, ys, zs, xe, ye, ze, radius = self.coords()
+        xs, ys, zs, xe, ye, ze, radius,  = self.coords()
         # Create arrow (arrows are created along the X axis by default)
         self.arrowSource.SetShaftRadius(radius)
         #self.arrowSource.SetTipLength(radius*10/length)
@@ -999,6 +1011,12 @@ def main(comp,
     # create a separate hal component and create a pin to clear the backplot
     vcomp = hal.component("vismach")
     vcomp.newpin("plotclear",hal.HAL_BIT,hal.HAL_IN)
+    vcomp.newpin("work_pos_x",hal.HAL_FLOAT,hal.HAL_OUT)
+    vcomp.newpin("work_pos_y",hal.HAL_FLOAT,hal.HAL_OUT)
+    vcomp.newpin("work_pos_z",hal.HAL_FLOAT,hal.HAL_OUT)
+    vcomp.newpin("tool_pos_x",hal.HAL_FLOAT,hal.HAL_OUT)
+    vcomp.newpin("tool_pos_y",hal.HAL_FLOAT,hal.HAL_OUT)
+    vcomp.newpin("tool_pos_z",hal.HAL_FLOAT,hal.HAL_OUT)
     vcomp.ready()
     # create the backplot to be added to the renderer
     backplot = Plotter(vcomp, work, tooltip, "plotclear")
@@ -1016,7 +1034,11 @@ def main(comp,
                     get_actors_to_update(item)
         get_actors_to_update(model)
         backplot.update()
+
         t2w = backplot.tool2work.GetMatrix()
+        vcomp["work_pos_x"] = work.current_matrix.GetElement(0,3)
+        vcomp["work_pos_y"] = work.current_matrix.GetElement(1,3)
+        vcomp["work_pos_z"] = work.current_matrix.GetElement(2,3)
         r1=("{:8.3f} {:8.3f} {:8.3f} {:8.3f}".format(t2w.GetElement(0,0), t2w.GetElement(0,1), t2w.GetElement(0,2), t2w.GetElement(0,3)))
         r2=("{:8.3f} {:8.3f} {:8.3f} {:8.3f}".format(t2w.GetElement(1,0), t2w.GetElement(1,1), t2w.GetElement(1,2), t2w.GetElement(1,3)))
         r3=("{:8.3f} {:8.3f} {:8.3f} {:8.3f}".format(t2w.GetElement(2,0), t2w.GetElement(2,1), t2w.GetElement(2,2), t2w.GetElement(2,3)))
