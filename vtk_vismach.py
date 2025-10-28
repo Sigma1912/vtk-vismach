@@ -36,25 +36,37 @@ def update_passed_args(self, v):
     return s*var
 
 
+def parse_arguments(self, args):
+    if args and isinstance(args[0], hal.component): # global halpin passed
+        self.comp = args[0]
+        args = args[1:]
+        self.needs_updates = True
+    elif args and isinstance(args[0],type(hal)): # local halpin passed
+        self.comp = args[0]
+        args = args[1:]
+        self.needs_updates = True
+    else:  # no halpin passed
+        self.comp = None
+        self.needs_updates = False
+    # check number of arguments against expected number
+    if hasattr(self, "get_info"):
+        if len(args) != len(self.get_info()):
+            raise ValueError('Expected arguments are', self.get_info())
+    self._coords = args
+    # prepare so at least the first update is run as instances with static values are not updated after
+    self.first_update = True
+
+
 class CoordsBase(vtk.vtkActor):
     def __init__(self, *args):
-        if args and isinstance(args[0], hal.component):
-            self.comp = args[0]
-            args = args[1:]
-        elif args and isinstance(args[0],type(hal)):
-            self.comp = args[0]
-            args = args[1:]
-        else:
-            self.comp = None
-        self._coords = args
-        if hasattr(self, "create"):
-            self.create()
+        parse_arguments(self, args)
+        self.create()
 
     def coords(self):
         return list(map(self._coord, self._coords))
 
     def _coord(self, v):
-        s=1
+        s = 1 # default scale factor
         if isinstance(v,tuple):
             # tuple syntax has been used, ie (<halpin_name>, scalefactor)
             tup = v
@@ -68,102 +80,105 @@ class CoordsBase(vtk.vtkActor):
             return s*v
 
 
-
 class Box(CoordsBase):
+    def get_info(self):
+        return ('x1', 'y1', 'z1', 'x2', 'y2', 'z2')
+
     def create(self, *args):
         self.cube = vtk.vtkCubeSource()
-        self.cube.SetXLength(0)
-        self.cube.SetYLength(0)
-        self.cube.SetZLength(0)
-        self.cube.Update()
         mapper = vtk.vtkPolyDataMapper()
         mapper.SetInputData(self.cube.GetOutput())
         self.SetMapper(mapper)
 
     def update(self):
-        x1, y1, z1, x2, y2, z2 = self.coords()
-        if x1 > x2:
-            tmp = x1
-            x1 = x2
-            x2 = tmp
-        if y1 > y2:
-            tmp = y1
-            y1 = y2
-            y2 = tmp
-        if z1 > z2:
-            tmp = z1
-            z1 = z2
-            z2 = tmp
-        self.cube.SetXLength(x2-x1)
-        self.cube.SetYLength(y2-y1)
-        self.cube.SetZLength(z2-z1)
-        self.cube.Update()
-        self.SetPosition(x1,y1,z1)
-        self.AddPosition((x2-x1)/2,(y2-y1)/2,(z2-z1)/2)
+        if self.needs_updates or self.first_update:
+            self.first_update = False
+            x1, y1, z1, x2, y2, z2 = self.coords()
+            if x1 > x2:
+                tmp = x1
+                x1 = x2
+                x2 = tmp
+            if y1 > y2:
+                tmp = y1
+                y1 = y2
+                y2 = tmp
+            if z1 > z2:
+                tmp = z1
+                z1 = z2
+                z2 = tmp
+            self.cube.SetXLength(x2-x1)
+            self.cube.SetYLength(y2-y1)
+            self.cube.SetZLength(z2-z1)
+            self.cube.Update()
+            self.SetPosition(x1,y1,z1)
+            self.AddPosition((x2-x1)/2,(y2-y1)/2,(z2-z1)/2)
 
 
 # specify the width in X and Y, and the height in Z
 # the box is centered on the origin
 class BoxCentered(CoordsBase):
+    def get_info(self):
+        return ('xw', 'yw', 'zw')
+
     def create(self, *args):
-        xw, yw, zw = self.coords()
         self.cube = vtk.vtkCubeSource()
-        self.cube.SetXLength(xw)
-        self.cube.SetYLength(yw)
-        self.cube.SetZLength(zw)
-        self.cube.Update()
         mapper = vtk.vtkPolyDataMapper()
         mapper.SetInputData(self.cube.GetOutput())
         self.SetMapper(mapper)
 
     def update(self):
-        xw, yw, zw = self.coords()
-        self.cube.SetXLength(xw)
-        self.cube.SetYLength(yw)
-        self.cube.SetZLength(zw)
-        self.cube.Update()
+        if self.needs_updates or self.first_update:
+            self.first_update = False
+            xw, yw, zw = self.coords()
+            self.cube.SetXLength(xw)
+            self.cube.SetYLength(yw)
+            self.cube.SetZLength(zw)
+            self.cube.Update()
 
 
 # specify the width in X and Y, and the height in Z
 # the box is centered on the origin
 class Sphere(CoordsBase):
+    def get_info(self):
+        return ('x', 'y', 'z', 'r')
+
     def create(self, *args):
-        x, y, z, r = self.coords()
         self.sphere = vtk.vtkSphereSource()
-        self.sphere.SetRadius(r)
-        self.sphere.Update()
         mapper = vtk.vtkPolyDataMapper()
         mapper.SetInputData(self.sphere.GetOutput())
         self.SetMapper(mapper)
-        self.SetPosition(x,y,z)
 
     def update(self):
-        x, y, z, r = self.coords()
-        self.sphere.SetRadius(r)
-        self.sphere.Update()
-        self.SetPosition(x,y,z)
+        if self.needs_updates or self.first_update:
+            self.first_update = False
+            x, y, z, r = self.coords()
+            self.sphere.SetRadius(r)
+            self.sphere.Update()
+            self.SetPosition(x,y,z)
 
 
 # Create cylinder along Y axis (default direction for vtkCylinderSource)
 class CylinderY(CoordsBase):
+    def get_info(self):
+        return ('length', 'radius')
+
     def create(self, *args):
-        length, radius = self.coords()
+        self.resolution = 10
         self.cylinder = vtk.vtkCylinderSource()
-        self.cylinder.SetRadius(radius)
-        self.cylinder.SetHeight(length)
-        self.cylinder.SetResolution(10)
-        self.cylinder.Update()
         self.mapper = vtk.vtkPolyDataMapper()
         self.mapper.SetInputData(self.cylinder.GetOutput())
         self.SetMapper(self.mapper)
 
     def update(self):
-        length, radius = self.coords()
-        self.cylinder.SetRadius(radius)
-        self.cylinder.SetHeight(length)
-        self.SetUserTransform(vtk.vtkTransform())
-        self.GetUserTransform().Translate(0,length/2,0)
-        self.cylinder.Update()
+        if self.needs_updates or self.first_update:
+            self.first_update = False
+            length, radius = self.coords()
+            self.cylinder.SetRadius(radius)
+            self.cylinder.SetHeight(length)
+            self.cylinder.SetResolution(self.resolution)
+            self.SetUserTransform(vtk.vtkTransform())
+            self.GetUserTransform().Translate(0,length/2,0)
+            self.cylinder.Update()
 
 
 # Create cylinder along Z axis
@@ -173,12 +188,14 @@ class CylinderZ(CylinderY):
         self.RotateX(90)
 
     def update(self):
-        length, radius = self.coords()
-        self.cylinder.SetRadius(radius)
-        self.cylinder.SetHeight(length)
-        self.SetUserTransform(vtk.vtkTransform())
-        self.GetUserTransform().Translate(0,0,length/2)
-        self.cylinder.Update()
+        if self.needs_updates or self.first_update:
+            self.first_update = False
+            length, radius = self.coords()
+            self.cylinder.SetRadius(radius)
+            self.cylinder.SetHeight(length)
+            self.SetUserTransform(vtk.vtkTransform())
+            self.GetUserTransform().Translate(0,0,length/2)
+            self.cylinder.Update()
 
 
 # Create cylinder along X axis
@@ -188,65 +205,94 @@ class CylinderX(CylinderY):
         self.RotateZ(-90)
 
     def update(self):
-        length, radius = self.coords()
-        self.cylinder.SetRadius(radius)
-        self.cylinder.SetHeight(length)
-        self.SetUserTransform(vtk.vtkTransform())
-        self.GetUserTransform().Translate(length/2,0,0)
-        self.cylinder.Update()
+        if self.needs_updates or self.first_update:
+            self.first_update = False
+            length, radius = self.coords()
+            self.cylinder.SetRadius(radius)
+            self.cylinder.SetHeight(length)
+            self.SetUserTransform(vtk.vtkTransform())
+            self.GetUserTransform().Translate(length/2,0,0)
+            self.cylinder.Update()
+
+
+# draw a line from point_1 to point_2
+class Line(CoordsBase):
+    def get_info(self):
+        return ('x_start', 'y_start', 'z_start', 'x_end', 'y_end', 'z_end', 'radius')
+
+    def create(self):
+        self.lineSource = vtk.vtkLineSource()
+        mapper = vtk.vtkPolyDataMapper()
+        mapper.SetInputConnection(self.lineSource.GetOutputPort())
+        self.SetMapper(mapper)
+
+    def update(self):
+        if self.needs_updates or self.first_update:
+            self.first_update = False
+            xs, ys, zs, xe, ye, ze, r = self.coords()
+            self.lineSource.SetPoint1(xs,ys,zs)
+            self.lineSource.SetPoint2(xe,ye,ze)
+            self.GetProperty().SetLineWidth(r)
 
 
 # Creates a 3d cylinder from (xs,ys,zs) to (xe,ye,ze)
 class CylinderOriented(CoordsBase):
+    def get_info(self):
+        return ('x_start', 'y_start', 'z_start', 'x_end', 'y_end', 'z_end', 'radius')
+
     def create(self):
         self.resolution = 10
         # Create a cylinder (cylinders are created along Y axis by default)
         # Cylinder center is in the middle of the cylinder
         self.cylinderSource = vtk.vtkCylinderSource()
-        self.cylinderSource.SetRadius(0)
         self.cylinderSource.SetResolution(self.resolution)
         mapper = vtk.vtkPolyDataMapper()
         mapper.SetInputConnection(self.cylinderSource.GetOutputPort())
         self.SetMapper(mapper)
 
     def update(self):
-        xs, ys, zs, xe, ye, ze, radius = self.coords()
-        self.cylinderSource.SetRadius(radius)
-        self.cylinderSource.SetResolution(self.resolution)
-        # Generate a random start and end point
-        startPoint = [xs, ys, zs]
-        endPoint = [xe, ye, ze]
-        # Compute a basis
-        normalizedX = [0] * 3
-        normalizedY = [0] * 3
-        normalizedZ = [0] * 3
-        # The X axis is a vector from start to end
-        vtk.vtkMath.Subtract(endPoint, startPoint, normalizedX)
-        length = vtk.vtkMath.Norm(normalizedX)
-        vtk.vtkMath.Normalize(normalizedX)
-        vtk.vtkMath.Cross(normalizedX, [0,0,1], normalizedZ)
-        vtk.vtkMath.Normalize(normalizedZ)
-        # The Y axis is Z cross X
-        vtk.vtkMath.Cross(normalizedZ, normalizedX, normalizedY)
-        matrix = vtk.vtkMatrix4x4()
-        # Create the direction cosine matrix
-        matrix.Identity()
-        for i in range(0, 3):
-            matrix.SetElement(i, 0, normalizedX[i])
-            matrix.SetElement(i, 1, normalizedY[i])
-            matrix.SetElement(i, 2, normalizedZ[i])
-        # Apply the transforms
-        transform = vtk.vtkTransform()
-        transform.Translate(startPoint)  # translate to starting point
-        transform.Concatenate(matrix)  # apply direction cosines
-        transform.RotateZ(-90.0)  # align cylinder to x axis
-        transform.Scale(1.0, length, 1.0)  # scale along the height vector
-        transform.Translate(0, .5, 0)  # translate to start of cylinder
-        self.SetUserMatrix(transform.GetMatrix())
+        if self.needs_updates or self.first_update:
+            self.first_update = False
+            xs, ys, zs, xe, ye, ze, radius = self.coords()
+            self.cylinderSource.SetRadius(radius)
+            self.cylinderSource.SetResolution(self.resolution)
+            # Generate a random start and end point
+            startPoint = [xs, ys, zs]
+            endPoint = [xe, ye, ze]
+            # Compute a basis
+            normalizedX = [0] * 3
+            normalizedY = [0] * 3
+            normalizedZ = [0] * 3
+            # The X axis is a vector from start to end
+            vtk.vtkMath.Subtract(endPoint, startPoint, normalizedX)
+            length = vtk.vtkMath.Norm(normalizedX)
+            vtk.vtkMath.Normalize(normalizedX)
+            vtk.vtkMath.Cross(normalizedX, [0,0,1], normalizedZ)
+            vtk.vtkMath.Normalize(normalizedZ)
+            # The Y axis is Z cross X
+            vtk.vtkMath.Cross(normalizedZ, normalizedX, normalizedY)
+            matrix = vtk.vtkMatrix4x4()
+            # Create the direction cosine matrix
+            matrix.Identity()
+            for i in range(0, 3):
+                matrix.SetElement(i, 0, normalizedX[i])
+                matrix.SetElement(i, 1, normalizedY[i])
+                matrix.SetElement(i, 2, normalizedZ[i])
+            # Apply the transforms
+            transform = vtk.vtkTransform()
+            transform.Translate(startPoint)  # translate to starting point
+            transform.Concatenate(matrix)  # apply direction cosines
+            transform.RotateZ(-90.0)  # align cylinder to x axis
+            transform.Scale(1.0, length, 1.0)  # scale along the height vector
+            transform.Translate(0, .5, 0)  # translate to start of cylinder
+            self.SetUserMatrix(transform.GetMatrix())
 
 
 # Creates a 3d arrow pointing from (xs,ys,zs) to (xe,ye,ze)
 class ArrowOriented(CoordsBase):
+    def get_info(self):
+        return ('x_start', 'y_start', 'z_start', 'x_end', 'y_end', 'z_end', 'radius')
+
     def create(self):
         self.resolution = 10
         # Create arrow (arrows are created along the X axis by default)
@@ -257,43 +303,45 @@ class ArrowOriented(CoordsBase):
         self.SetMapper(mapper)
 
     def update(self):
-        xs, ys, zs, xe, ye, ze, radius,  = self.coords()
-        # Create arrow (arrows are created along the X axis by default)
-        self.arrowSource.SetShaftRadius(radius)
-        #self.arrowSource.SetTipLength(radius*10/length)
-        self.arrowSource.SetTipRadius(radius*3)
-        self.arrowSource.SetTipResolution(self.resolution)
-        # Generate a random start and end point
-        startPoint = [xs, ys, zs]
-        endPoint = [xe, ye, ze]
-        # Compute a basis
-        normalizedX = [0] * 3
-        normalizedY = [0] * 3
-        normalizedZ = [0] * 3
-        # The X axis is a vector from start to end
-        vtk.vtkMath.Subtract(endPoint, startPoint, normalizedX)
-        length = vtk.vtkMath.Norm(normalizedX)
-        if length < 0.1: length = 1
-        self.arrowSource.SetTipLength(radius*2/length)
-        vtk.vtkMath.Normalize(normalizedX)
-        vtk.vtkMath.Cross(normalizedX, [0,0,1], normalizedZ)
-        vtk.vtkMath.Normalize(normalizedZ)
-        # The Y axis is Z cross X
-        vtk.vtkMath.Cross(normalizedZ, normalizedX, normalizedY)
-        matrix = vtk.vtkMatrix4x4()
-        # Create the direction cosine matrix
-        matrix.Identity()
-        for i in range(0, 3):
-            matrix.SetElement(i, 0, normalizedX[i])
-            matrix.SetElement(i, 1, normalizedY[i])
-            matrix.SetElement(i, 2, normalizedZ[i])
-        # Apply the transforms
-        transform = vtk.vtkTransform()
-        transform.Translate(startPoint)  # translate to starting point
-        transform.Concatenate(matrix)  # apply direction cosines
-        transform.Scale(length, 1.0, 1.0)  # scale along the height vector
-        transform.Translate(0, .5, 0)  # translate to start of cylinder
-        self.SetUserMatrix(transform.GetMatrix())
+        if self.needs_updates or self.first_update:
+            self.first_update = False
+            xs, ys, zs, xe, ye, ze, radius,  = self.coords()
+            # Create arrow (arrows are created along the X axis by default)
+            self.arrowSource.SetShaftRadius(radius)
+            #self.arrowSource.SetTipLength(radius*10/length)
+            self.arrowSource.SetTipRadius(radius*3)
+            self.arrowSource.SetTipResolution(self.resolution)
+            # Generate a random start and end point
+            startPoint = [xs, ys, zs]
+            endPoint = [xe, ye, ze]
+            # Compute a basis
+            normalizedX = [0] * 3
+            normalizedY = [0] * 3
+            normalizedZ = [0] * 3
+            # The X axis is a vector from start to end
+            vtk.vtkMath.Subtract(endPoint, startPoint, normalizedX)
+            length = vtk.vtkMath.Norm(normalizedX)
+            if length < 0.1: length = 1
+            self.arrowSource.SetTipLength(radius*2/length)
+            vtk.vtkMath.Normalize(normalizedX)
+            vtk.vtkMath.Cross(normalizedX, [0,0,1], normalizedZ)
+            vtk.vtkMath.Normalize(normalizedZ)
+            # The Y axis is Z cross X
+            vtk.vtkMath.Cross(normalizedZ, normalizedX, normalizedY)
+            matrix = vtk.vtkMatrix4x4()
+            # Create the direction cosine matrix
+            matrix.Identity()
+            for i in range(0, 3):
+                matrix.SetElement(i, 0, normalizedX[i])
+                matrix.SetElement(i, 1, normalizedY[i])
+                matrix.SetElement(i, 2, normalizedZ[i])
+            # Apply the transforms
+            transform = vtk.vtkTransform()
+            transform.Translate(startPoint)  # translate to starting point
+            transform.Concatenate(matrix)  # apply direction cosines
+            transform.Scale(length, 1.0, 1.0)  # scale along the height vector
+            transform.Translate(0, .5, 0)  # translate to start of cylinder
+            self.SetUserMatrix(transform.GetMatrix())
 
 
 # function to crate the reader for 3d geometry files
@@ -358,23 +406,20 @@ class ReadPolyData(vtk.vtkActor):
 
 
 # Dynamically loads 3D geometry depending on the self.comp[self.var] value
-class HalReadPolyData(vtk.vtkActor):
-    def __init__(self, comp, var, directory):
-        self.comp = comp            # instance of the halcomponent used in the model
-        self.var = var              # name of the file (integer or float)
-        self.directory = directory  # directory holding the 3D geometry files
+class HalReadPolyData(CoordsBase):
+    def get_info(self):
+        return ('file_number', 'directory')
+
+    def create(self):
         self.SetUserTransform(vtk.vtkTransform())
 
     def update(self):
-        for v in ['var']:
-            # create variable from list and update from class variables of the same name
-            globals()[v] = update_passed_args(self, v)
-        self.tool_nr = var
-        self.filename = self.directory + str(self.tool_nr) + ".stl"
+        file_nr, directory = self.coords()
+        filename = directory + str(file_nr) + ".stl"
         # Create a mapper
         mapper = vtk.vtkPolyDataMapper()
-        if not os.path.isfile(self.filename):
-            print("Vtk_Vismach HalReadPolyData Error: Unable to read file ", self.filename)
+        if not os.path.isfile(filename):
+            print("Vtk_Vismach HalReadPolyData Error: Unable to read file ", filename)
             # create a dummy sphere instead
             sphereSource = vtk.vtkSphereSource()
             sphereSource.SetCenter(0.0, 0.0, 0.0)
@@ -382,7 +427,7 @@ class HalReadPolyData(vtk.vtkActor):
             mapper.SetInputConnection(sphereSource.GetOutputPort())
         else:
             # create from stl file
-            reader = make_reader(self.filename)
+            reader = make_reader(filename)
             mapper.SetInputConnection(reader.GetOutputPort())
         self.SetMapper(mapper)
         # Avoid visible backfaces on Linux with some video cards like intel
@@ -469,43 +514,6 @@ class Capture(vtk.vtkActor):
     def update(self):
         self.current_matrix = self.GetMatrix()            # store the total transformation from this cycle
         self.SetUserTransform(vtk.vtkTransform()) # reset tranform for next update cycle
-
-
-# draw a line from point_1 to point_2, thickness is optional (defaults to 5)
-class HalLine(vtk.vtkActor):
-    def __init__(self, comp, x1var, y1var, z1var, x2var, y2var, z2var, stretch=1, r=1):
-        self.SetUserTransform(vtk.vtkTransform())
-        self.comp = comp
-        self.x1var = x1var
-        self.y1var = y1var
-        self.z1var = z1var
-        self.x2var = x2var
-        self.y2var = y2var
-        self.z2var = z2var
-        self.stretch = stretch
-        self.r = r
-        # we initialize with both points (0,0,0) and get the actual values in the update loop
-        (x1,y1,z1) = (x2,y2,z2) = (0,0,0)
-        # create the line
-        self.lineSource = vtk.vtkLineSource()
-        self.lineSource.SetPoint1(x1,y1,z1)
-        self.lineSource.SetPoint2(x2,y2,z2)
-        # Visualize
-        colors = vtk.vtkNamedColors()
-        mapper = vtk.vtkPolyDataMapper()
-        mapper.SetInputConnection(self.lineSource.GetOutputPort())
-        self.SetMapper(mapper)
-        self.GetProperty().SetLineWidth(r)
-        self.GetProperty().SetColor(colors.GetColor3d("Silver"))
-
-    def update(self):
-        # update the two points, P0 and P1
-        for v in ['x1var','y1var','z1var','x2var','y2var','z2var']:
-            # create variable from list and update from class variables of the same name
-            globals()[v] = update_passed_args(self, v)
-        s = self.stretch
-        self.lineSource.SetPoint1(x1var,y1var,z1var)
-        self.lineSource.SetPoint2(s*x2var,s*y2var,s*z2var)
 
 
 # Create a trihedron indicating coordinate orientation
@@ -667,19 +675,7 @@ class Collection(vtk.vtkAssembly):
                 if not hasattr(self, "tracked_parts"):
                     self.tracked_parts = []
                 self.tracked_parts += part.tracked_parts
-        # parse args
-        if args and isinstance(args[0], hal.component):
-            self.comp = args[0]
-            args = args[1:]
-        elif args and isinstance(args[0],type(hal)):
-            self.comp = args[0]
-            args = args[1:]
-        else:
-            self.comp = None
-        if hasattr(self, "get_info"):
-            if len(args) != len(self.get_info()):
-                raise ValueError('Expected arguments are', self.get_info())
-        self._coords = args
+        parse_arguments(self, args)
 
     def coords(self):
         return list(map(self._coord, self._coords))
@@ -710,9 +706,11 @@ class Translate(Collection):
         return ("x","y","z")
 
     def update(self):
-        x,y,z = self.coords()
-        self.transformation = vtk.vtkTransform()
-        self.transformation.Translate(x,y,z)
+        if self.needs_updates or self.first_update:
+            self.first_update = False
+            x,y,z = self.coords()
+            self.transformation = vtk.vtkTransform()
+            self.transformation.Translate(x,y,z)
 
     def transform(self):
         self.SetUserTransform(self.transformation)
@@ -723,10 +721,12 @@ class Rotate(Collection):
         return ("th","x","y","z")
 
     def update(self):
-        th,x,y,z = self.coords()
-        self.transformation = vtk.vtkTransform()
-        self.transformation.PreMultiply()
-        self.transformation.RotateWXYZ(th,x,y,z)
+        if self.needs_updates or self.first_update:
+            self.first_update = False
+            th,x,y,z = self.coords()
+            self.transformation = vtk.vtkTransform()
+            self.transformation.PreMultiply()
+            self.transformation.RotateWXYZ(th,x,y,z)
 
     def transform(self):
         self.SetUserTransform(self.transformation)
