@@ -82,17 +82,9 @@ c.ready()
 
 # used to rotate parts around the nutation axis
 class HalNutate(Collection):
-    def __init__(self, parts, comp, var, scale, x, y, z):
-        super().__init__(parts)
-        self.comp = comp
-        self.var = var
-        self.current_scale = scale
-
     def update(self):
-        for v in ['var']:
-            # create variable from list and update from class variables of the same name
-            globals()[v] = update_passed_args(self, v)
-        th = self.current_scale * var
+        th,x,y,z = self.coords()
+        # override x,y,z
         x = 0
         y = sin(radians(c.nutation_angle))
         z = cos(radians(c.nutation_angle))
@@ -128,15 +120,15 @@ tool = Collection([
                     tool_axes,
                     tool_shape
                     ])
-tool = HalRotate([tool],c,"virtual_rotation",1,0,0,1)
-tool = HalTranslate([tool],hal,"motion.tooloffset.z",0,0,-1)
-tool = HalVectorTranslate([tool],c,0,"pivot_y","pivot_z",-1)
+tool = Rotate([tool],c,"virtual_rotation",0,0,1)
+tool = Translate([tool],hal,0,0,("motion.tooloffset.z",-1))
+tool = Translate([tool],c,0,("pivot_y",-1),("pivot_z",-1))
 tool = Color([tool],(1,0,1),1)
 # create spindle head
 EGO_B = Color([EGO_B],(0.7,0.7,0),1)
 # rotate the nutation joint to the nutation angle, 90° should have the nutation axis in the horizontal plane
 EGO_B = Rotate([EGO_B],-90,-1,0,0)
-EGO_B = HalRotate([EGO_B],c,"nutation_angle",-1,1,0,0)
+EGO_B = Rotate([EGO_B],c,"nutation_angle",-1,0,0)
 
 spindle_assembly = Collection([
                    tool,
@@ -147,18 +139,18 @@ spindle_assembly = Collection([
                    ])
 
 # create HAL-link for b-axis rotational joint"
-spindle_assembly = HalNutate([spindle_assembly],hal,"joint.3.pos-fb",1,0,-1,0)
+spindle_assembly = HalNutate([spindle_assembly],hal,"joint.3.pos-fb",0,-1,0)
 # Z carriage
 EGO_Z = Color([EGO_Z],(1,0.5,0),1)
-EGO_Z=Translate([EGO_Z], 0, 0, -759.5)
+EGO_Z = Translate([EGO_Z], 0, 0, -759.5)
 spindle_z = Collection([
              spindle_assembly,
              EGO_Z
              ])
 # move by the values set for the pivot lengths so the vismach origin is in the center of the spindle nose
-spindle_z = HalVectorTranslate([spindle_z],c,0,"pivot_y","pivot_z")
+spindle_z = Translate([spindle_z],c,0,"pivot_y","pivot_z")
 # spindle head and z-slide move with z
-spindle_z = HalTranslate([spindle_z],hal,"joint.2.pos-fb",0,0,1)
+spindle_z = Translate([spindle_z],hal,0,0,"joint.2.pos-fb")
 # move spindle_z to z-home position
 spindle_z = Translate([spindle_z], 0, 0, machine_zero_z)
 # x carriage
@@ -168,7 +160,7 @@ spindle_xz = Collection([
              EGO_X
              ])
 # spindle head, z-slide and x-slide move with x
-spindle_xz = HalTranslate([spindle_xz],hal,"joint.0.pos-fb",1,0,0)
+spindle_xz = Translate([spindle_xz],hal,"joint.0.pos-fb",0,0)
 # move spindle_xz to x-home position
 spindle_xz = Translate([spindle_xz], machine_zero_x, 0, 0)
 # end toolside
@@ -222,7 +214,7 @@ rotary_table_c = Collection([
                  work
                  ])
 # Rotary table and work roatae with axis C"
-rotary_table_c = HalRotate([rotary_table_c],hal,"joint.4.pos-fb",1,0,0,-1)
+rotary_table_c = Rotate([rotary_table_c],hal,"joint.4.pos-fb",0,0,-1)
 # y-carriage that carries the rotary table
 EGO_Y = Color([EGO_Y],(0.2,0.2,0.2),1)
 table = Collection([
@@ -230,8 +222,8 @@ table = Collection([
         EGO_Y
         ])
 # Table moves with y axis
-#table = HalTranslate([table],c,"axis_y",0,-1,0)
-table = HalTranslate([table],hal,"joint.1.pos-fb",0,-1,0)
+#table = HalTranslate_orig([table],c,"axis_y",0,-1,0)
+table = Translate([table],hal,0,("joint.1.pos-fb",-1),0)
 # move table to y-home position
 table = Translate([table], 0, -machine_zero_y, 0)
 #/work-side
@@ -240,7 +232,7 @@ table = Translate([table], 0, -machine_zero_y, 0)
 base = Color([EGO_BC],(0.3,0.3,0.3),1)
 
 arrow = ArrowOriented(hal, machine_zero_x, 0,-machine_zero_z,0,("vismach.work_pos_y",1),0,50)
-#arrow = Translate([arrow], machine_zero_x, 0, machine_zero_z)
+#arrow = Translate_orig([arrow], machine_zero_x, 0, machine_zero_z)
 
 model = Collection([
         machine_axes,
@@ -248,13 +240,13 @@ model = Collection([
         table,
         base,
         arrow,
-        #CylinderX(hal,"joint.0.pos-fb",50),
-        #Box(hal,"joint.1.pos-fb",0,0,100,100,-100),
-        #Sphere(0,0,0,5)
-        #HalLine(-100,100,100,-1000,-1000,1000,50),
-        #ArrowOriented(hal,0,0,0,"vismach.work_pos_x","vismach.work_pos_y","vismach.work_pos_z",50),
-        #CylinderOriented(hal,"joint.1.pos-fb",100,100,-1000,-1000,1000,50),
-        #ArrowOriented(c,0,0,0,"twp_ox_world","twp_oy_world","twp_oz_world",20)
+        CylinderX(hal,"joint.0.pos-fb",50),
+        Box(hal,"joint.1.pos-fb",0,0,100,100,-100),
+        Sphere(0,0,0,5),
+        HalLine(-100,100,100,-1000,-1000,1000,50),
+        ArrowOriented(hal,0,0,0,"vismach.work_pos_x","vismach.work_pos_y","vismach.work_pos_z",50),
+        CylinderOriented(hal,"joint.1.pos-fb",100,100,-1000,-1000,1000,50),
+        ArrowOriented(c,0,0,0,"twp_ox_world","twp_oy_world","twp_oz_world",20),
         ])
 
 #hud

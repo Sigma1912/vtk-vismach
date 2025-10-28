@@ -12,15 +12,16 @@ from PyQt5.QtCore import QTimer
 
 
 def update_passed_args(self, v):
+    v = getattr(self,v)
     s = 1
     if isinstance(v,tuple):
         # tuple syntax has been used, ie (<halpin_name>, scalefactor)
-        tup = v
+        tup =v
         v = tup[0]
         s = tup[1]
-    if isinstance(getattr(self,v), str):
+    if isinstance(v, str):
         # class variable of the same name is a string (ie a pinname)
-        halpin = getattr(self,v)
+        halpin = v
         if isinstance(self.comp, hal.component):
             # if the component has been passed then we need to get the value using that
             var = self.comp[halpin]
@@ -31,7 +32,7 @@ def update_passed_args(self, v):
             print("Error: Unrecognized module ", self.comp)
     else:
         # class variable of the same name is not a string (ie a constant value)
-        var = getattr(self,v)
+        var = v
     return s*var
 
 
@@ -657,20 +658,78 @@ class HalCoordsFromNormalAndDirection(vtk.vtkAxesActor):
 
 
 class Collection(vtk.vtkAssembly):
-    def __init__(self, parts):
+    def __init__(self, parts, *args):
         self.SetUserTransform(vtk.vtkTransform())
+        # Collect parts
         for part in parts:
             self.AddPart(part)
             if hasattr(part, "tracked_parts"):
                 if not hasattr(self, "tracked_parts"):
                     self.tracked_parts = []
                 self.tracked_parts += part.tracked_parts
+        # parse args
+        if args and isinstance(args[0], hal.component):
+            self.comp = args[0]
+            args = args[1:]
+        elif args and isinstance(args[0],type(hal)):
+            self.comp = args[0]
+            args = args[1:]
+        else:
+            self.comp = None
+        if hasattr(self, "get_info"):
+            if len(args) != len(self.get_info()):
+                raise ValueError('Expected arguments are', self.get_info())
+        self._coords = args
+
+    def coords(self):
+        return list(map(self._coord, self._coords))
+
+    def _coord(self, v):
+        s=1
+        if isinstance(v,tuple):
+            # tuple syntax has been used, ie (<halpin_name>, scalefactor)
+            tup = v
+            v = tup[0]
+            s = tup[1]
+        if isinstance(v, str) and isinstance(self.comp, hal.component):
+            return s*self.comp[v]
+        elif isinstance(v, str) and isinstance(self.comp,type(hal)):
+            return s*hal.get_value(v)
+        else:
+            return s*v
 
     def capture(self):
         if hasattr(self, "tracked_parts"):
             if hasattr(self, "transformation"):
                 for tracked_part in self.tracked_parts:
                     tracked_part.GetUserTransform().Concatenate(self.transformation)
+
+
+class Translate(Collection):
+    def get_info(self):
+        return ("x","y","z")
+
+    def update(self):
+        x,y,z = self.coords()
+        self.transformation = vtk.vtkTransform()
+        self.transformation.Translate(x,y,z)
+
+    def transform(self):
+        self.SetUserTransform(self.transformation)
+
+
+class Rotate(Collection):
+    def get_info(self):
+        return ("th","x","y","z")
+
+    def update(self):
+        th,x,y,z = self.coords()
+        self.transformation = vtk.vtkTransform()
+        self.transformation.PreMultiply()
+        self.transformation.RotateWXYZ(th,x,y,z)
+
+    def transform(self):
+        self.SetUserTransform(self.transformation)
 
 
 class Color(Collection):
@@ -700,93 +759,6 @@ class Color(Collection):
                 parts.GetProperty().SetOpacity(self.opacity)
         for part in self.GetParts():
             find_actors(part)
-
-
-class Translate(Collection):
-    def __init__(self, parts, x, y, z):
-        super().__init__(parts)
-        self.transformation = vtk.vtkTransform()
-        self.transformation.Translate(x,y,z)
-
-    def transform(self):
-        self.SetUserTransform(self.transformation)
-
-
-class HalTranslate(Collection):
-    def __init__(self, parts, comp, var, x, y, z):
-        super().__init__(parts)
-        self.comp = comp
-        self.var = var
-        self.x = x
-        self.y = y
-        self.z = z
-
-    def update(self):
-        for v in ['var']:
-            # create variable from list and update from class variables of the same name
-            globals()[v] = update_passed_args(self, v)
-        self.transformation = vtk.vtkTransform()
-        self.transformation.Translate(var*self.x, var*self.y, var*self.z)
-
-    def transform(self):
-        self.SetUserTransform(self.transformation)
-
-
-
-# translates an object using a variable translation vector, use scale=-1 to change direction
-class HalVectorTranslate(Collection):
-    def __init__(self, parts, comp, xvar, yvar, zvar, scale=1):
-        super().__init__(parts)
-        self.comp = comp
-        self.xvar = xvar
-        self.yvar = yvar
-        self.zvar = zvar
-        self.current_scale  = scale
-
-    def update(self):
-        for v in ['xvar','yvar','zvar']:
-            # create variable from list and update from class variables of the same name
-            globals()[v] = update_passed_args(self, v)
-        self.transformation = vtk.vtkTransform()
-        self.transformation.Translate(self.current_scale*xvar, self.current_scale*yvar, self.current_scale*zvar)
-
-    def transform(self):
-        self.SetUserTransform(self.transformation)
-
-
-class Rotate(Collection):
-    def __init__(self, parts, th, x, y, z):
-        super().__init__(parts)
-        self.transformation = vtk.vtkTransform()
-        self.transformation.PreMultiply()
-        self.transformation.RotateWXYZ(th,x,y,z)
-
-    def transform(self):
-        self.SetUserTransform(self.transformation)
-
-
-class HalRotate(Collection):
-    def __init__(self, parts, comp, var, scale, x, y, z):
-        super().__init__(parts)
-        self.SetUserTransform(vtk.vtkTransform())
-        self.comp = comp
-        self.var = var
-        self.current_scale = scale
-        self.x = x
-        self.y = y
-        self.z = z
-
-    def update(self):
-        for v in ['var']:
-            # create variable from list and update from class variables of the same name
-            globals()[v] = update_passed_args(self, v)
-        th = self.current_scale * var
-        self.transformation  = vtk.vtkTransform()
-        self.transformation.PreMultiply()
-        self.transformation.RotateWXYZ(th,self.x, self.y, self.z)
-
-    def transform(self):
-        self.SetUserTransform(self.transformation)
 
 
 class HalEulerRotate(Collection):
