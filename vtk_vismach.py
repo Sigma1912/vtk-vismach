@@ -57,30 +57,15 @@ class CoordsBase(vtk.vtkActor):
 
 class Box(CoordsBase):
     def create(self, *args):
-        x1, y1, z1, x2, y2, z2 = self.coords()
-        if x1 > x2:
-            tmp = x1
-            x1 = x2
-            x2 = tmp
-        if y1 > y2:
-            tmp = y1
-            y1 = y2
-            y2 = tmp
-        if z1 > z2:
-            tmp = z1
-            z1 = z2
-            z2 = tmp
         self.cube = vtk.vtkCubeSource()
-        self.cube.SetXLength(x2-x1)
-        self.cube.SetYLength(y2-y1)
-        self.cube.SetZLength(z2-z1)
+        self.cube.SetXLength(0)
+        self.cube.SetYLength(0)
+        self.cube.SetZLength(0)
         self.cube.Update()
         mapper = vtk.vtkPolyDataMapper()
         mapper.SetInputData(self.cube.GetOutput())
         self.SetMapper(mapper)
-        self.SetPosition(x1,y1,z1)
-        self.AddPosition((x2-x1)/2,(y2-y1)/2,(z2-z1)/2)
-
+        self.update()
 
     def update(self):
         x1, y1, z1, x2, y2, z2 = self.coords()
@@ -124,6 +109,7 @@ class BoxCentered(CoordsBase):
         self.cube.SetYLength(yw)
         self.cube.SetZLength(zw)
         self.cube.Update()
+
 
 # specify the width in X and Y, and the height in Z
 # the box is centered on the origin
@@ -200,16 +186,20 @@ class CylinderX(CylinderY):
 # Creates a 3d cylinder from (xs,ys,zs) to (xe,ye,ze)
 class CylinderOriented(CoordsBase):
     def create(self):
-        self.update()
+        self.resolution = 10
+        # Create a cylinder (cylinders are created along Y axis by default)
+        # Cylinder center is in the middle of the cylinder
+        self.cylinderSource = vtk.vtkCylinderSource()
+        self.cylinderSource.SetRadius(0)
+        self.cylinderSource.SetResolution(self.resolution)
+        mapper = vtk.vtkPolyDataMapper()
+        mapper.SetInputConnection(self.cylinderSource.GetOutputPort())
+        self.SetMapper(mapper)
 
     def update(self):
         xs, ys, zs, xe, ye, ze, radius = self.coords()
-        resolution = 10
-        # Create a cylinder (cylinders are created along Y axis by default)
-        # Cylinder center is in the middle of the cylinder
-        cylinderSource = vtk.vtkCylinderSource()
-        cylinderSource.SetRadius(radius)
-        cylinderSource.SetResolution(resolution)
+        self.cylinderSource.SetRadius(radius)
+        self.cylinderSource.SetResolution(self.resolution)
         # Generate a random start and end point
         startPoint = [xs, ys, zs]
         endPoint = [xe, ye, ze]
@@ -239,27 +229,27 @@ class CylinderOriented(CoordsBase):
         transform.RotateZ(-90.0)  # align cylinder to x axis
         transform.Scale(1.0, length, 1.0)  # scale along the height vector
         transform.Translate(0, .5, 0)  # translate to start of cylinder
-        # mapper
-        mapper = vtk.vtkPolyDataMapper()
-        mapper.SetInputConnection(cylinderSource.GetOutputPort())
         self.SetUserMatrix(transform.GetMatrix())
-        self.SetMapper(mapper)
 
 
 # Creates a 3d arrow pointing from (xs,ys,zs) to (xe,ye,ze)
 class ArrowOriented(CoordsBase):
     def create(self):
-        self.update()
+        self.resolution = 10
+        # Create arrow (arrows are created along the X axis by default)
+        self.arrowSource = vtk.vtkArrowSource()
+        self.arrowSource.SetTipResolution(self.resolution)
+        mapper = vtk.vtkPolyDataMapper()
+        mapper.SetInputConnection(self.arrowSource.GetOutputPort())
+        self.SetMapper(mapper)
 
     def update(self):
         xs, ys, zs, xe, ye, ze, radius = self.coords()
-        resolution = 10
         # Create arrow (arrows are created along the X axis by default)
-        cylinderSource = vtk.vtkArrowSource()
-        cylinderSource.SetShaftRadius(radius)
-        #cylinderSource.SetTipLength(radius*10/length)
-        cylinderSource.SetTipRadius(radius*3)
-        cylinderSource.SetTipResolution(resolution)
+        self.arrowSource.SetShaftRadius(radius)
+        #self.arrowSource.SetTipLength(radius*10/length)
+        self.arrowSource.SetTipRadius(radius*3)
+        self.arrowSource.SetTipResolution(self.resolution)
         # Generate a random start and end point
         startPoint = [xs, ys, zs]
         endPoint = [xe, ye, ze]
@@ -271,7 +261,7 @@ class ArrowOriented(CoordsBase):
         vtk.vtkMath.Subtract(endPoint, startPoint, normalizedX)
         length = vtk.vtkMath.Norm(normalizedX)
         if length < 0.1: length = 1
-        cylinderSource.SetTipLength(radius*2/length)
+        self.arrowSource.SetTipLength(radius*2/length)
         vtk.vtkMath.Normalize(normalizedX)
         vtk.vtkMath.Cross(normalizedX, [0,0,1], normalizedZ)
         vtk.vtkMath.Normalize(normalizedZ)
@@ -290,11 +280,7 @@ class ArrowOriented(CoordsBase):
         transform.Concatenate(matrix)  # apply direction cosines
         transform.Scale(length, 1.0, 1.0)  # scale along the height vector
         transform.Translate(0, .5, 0)  # translate to start of cylinder
-        # mapper
-        mapper = vtk.vtkPolyDataMapper()
-        mapper.SetInputConnection(cylinderSource.GetOutputPort())
         self.SetUserMatrix(transform.GetMatrix())
-        self.SetMapper(mapper)
 
 
 # function to crate the reader for 3d geometry files
@@ -460,7 +446,6 @@ class Plotter(vtk.vtkActor):
         self.tool2work.Concatenate(tool2world) # tool position [0,0,0] > Work [x,y,z]
 
 
-
 # create (invisible) actor that can be used to track combined transformation to world coordinates
 class Capture(vtk.vtkActor):
     def __init__(self):
@@ -514,7 +499,7 @@ class HalLine(vtk.vtkActor):
 class Axes(vtk.vtkAxesActor):
     def __init__(self, scale=50, radius_factor=0.5, label_x="X", label_y="Y", label_z="Z",):
         self.SetUserTransform(vtk.vtkTransform())
-        self.SetXAxisLabelText(label_x) #FIXME Labels are not shown
+        self.SetXAxisLabelText(label_x) #FIXME Labels are not shown (seems to be a bug in vtk)
         self.SetYAxisLabelText(label_y)
         self.SetZAxisLabelText(label_z)
         self.SetShaftTypeToCylinder()
@@ -627,7 +612,7 @@ class HalCoordsFromNormalAndDirection(vtk.vtkAxesActor):
 
     def create_axes(self, scale=50, radius_factor=0.5, label_prefix="", label_x="X", label_y="Y", label_z="Z",):
         self.SetUserTransform(vtk.vtkTransform())
-        self.SetXAxisLabelText(label_prefix + label_x) #FIXME axis labels not showing
+        self.SetXAxisLabelText(label_prefix + label_x) #FIXME axis labels not showing (seems to be a bug in vtk)
         self.SetYAxisLabelText(label_prefix + label_y)
         self.SetZAxisLabelText(label_prefix + label_z)
         self.SetShaftTypeToCylinder()

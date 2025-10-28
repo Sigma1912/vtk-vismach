@@ -261,8 +261,8 @@ model = Collection([
         Box(hal,"joint.1.pos-fb",0,0,100,100,-100),
         #Sphere(0,0,0,5)
         #HalLine(-100,100,100,-1000,-1000,1000,50),
-        #ArrowOriented(0,0,0,-1000,-1000,1000,50)
-        #CylinderOriented(hal,"joint.1.pos-fb",100,100,-1000,-1000,1000,50),
+        ArrowOriented(hal,0,0,0,-1000,"joint.1.pos-fb",1000,50),
+        CylinderOriented(hal,"joint.1.pos-fb",100,100,-1000,-1000,1000,50),
         #ArrowOriented(c,0,0,0,"twp_ox_world","twp_oy_world","twp_oz_world",20)
         ])
 
