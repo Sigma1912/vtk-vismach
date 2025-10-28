@@ -35,7 +35,7 @@ class CoordsBase(vtk.vtkActor):
             self.comp = args[0]
             args = args[1:]
         elif args and isinstance(args[0],type(hal)):
-            self.comp = None
+            self.comp = args[0]
             args = args[1:]
         else:
             self.comp = None
@@ -179,6 +179,21 @@ class CylinderZ(CylinderY):
         self.cylinder.SetHeight(length)
         self.SetUserTransform(vtk.vtkTransform())
         self.GetUserTransform().Translate(0,0,length/2)
+        self.cylinder.Update()
+
+
+# Create cylinder along X axis
+class CylinderX(CylinderY):
+    def create(self, *args):
+        super().create(self)
+        self.RotateZ(-90)
+
+    def update(self):
+        length, radius = self.coords()
+        self.cylinder.SetRadius(radius)
+        self.cylinder.SetHeight(length)
+        self.SetUserTransform(vtk.vtkTransform())
+        self.GetUserTransform().Translate(length/2,0,0)
         self.cylinder.Update()
 
 

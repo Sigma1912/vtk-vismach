@@ -257,7 +257,8 @@ model = Collection([
         table,
         base,
         arrow,
-        #Box(hal,"joint.1.pos-fb",0,0,100,100,-100),
+        CylinderX(hal,"joint.0.pos-fb",50),
+        Box(hal,"joint.1.pos-fb",0,0,100,100,-100),
         #Sphere(0,0,0,5)
         #HalLine(-100,100,100,-1000,-1000,1000,50),
         #ArrowOriented(0,0,0,-1000,-1000,1000,50)
