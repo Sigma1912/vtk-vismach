@@ -1,5 +1,5 @@
 # This is a modified version of 'vismach.py' to visualize Tilted Work Plane (TWP)
-# Author: David mueller
+# Author: David Mueller 2025
 # email: mueller_david@hotmail.com
 
 import hal
@@ -29,7 +29,7 @@ def parse_arguments(self, has_parts, args):
     self.first_update = True
 
 
-class CoordsBase(vtk.vtkActor):
+class CoordsBaseActor(vtk.vtkActor):
     def __init__(self, *args):
         has_parts = False # used to adjust the number of expected arguments
         parse_arguments(self, has_parts, args)
@@ -52,11 +52,11 @@ class CoordsBase(vtk.vtkActor):
             v = tup[0]
             s = tup[1]
         if isinstance(v, str) and isinstance(self.comp, hal.component):
-            if os.path.isdir(v):
+            if os.path.isdir(v): # Needed for ReadPolyData()
                 return v
             return s*self.comp[v]
         elif isinstance(v, str) and isinstance(self.comp,type(hal)):
-            if os.path.isdir(v):
+            if os.path.isdir(v):  # Needed for ReadPolyData()
                 return v
             return s*hal.get_value(v)
         else:
@@ -64,7 +64,8 @@ class CoordsBase(vtk.vtkActor):
                 return v
             return s*v
 
-class CoordsBase_assy(vtk.vtkAssembly):
+
+class CoordsBaseAssembly(vtk.vtkAssembly):
     def __init__(self, *args):
         has_parts = False # used to adjust the number of expected arguments
         parse_arguments(self, has_parts, args)
@@ -90,7 +91,7 @@ class CoordsBase_assy(vtk.vtkAssembly):
             return s*v
 
 
-class Box(CoordsBase):
+class Box(CoordsBaseActor):
     def get_expected_args(self):
         return ('(comp)','x1', 'y1', 'z1', 'x2', 'y2', 'z2')
 
@@ -126,7 +127,7 @@ class Box(CoordsBase):
 
 # specify the width in X and Y, and the height in Z
 # the box is centered on the origin
-class BoxCentered(CoordsBase):
+class BoxCentered(CoordsBaseActor):
     def get_expected_args(self):
         return ('(comp)','xw', 'yw', 'zw')
 
@@ -148,7 +149,7 @@ class BoxCentered(CoordsBase):
 
 # specify the width in X and Y, and the height in Z
 # the box is centered on the origin
-class Sphere(CoordsBase):
+class Sphere(CoordsBaseActor):
     def get_expected_args(self):
         return ('(comp)','x', 'y', 'z', 'r')
 
@@ -168,7 +169,7 @@ class Sphere(CoordsBase):
 
 
 # Create cylinder along Y axis (default direction for vtkCylinderSource)
-class CylinderY(CoordsBase):
+class CylinderY(CoordsBaseActor):
     def get_expected_args(self):
         return ('(comp)','length', 'radius')
 
@@ -226,7 +227,7 @@ class CylinderX(CylinderY):
 
 
 # draw a line from point_1 to point_2
-class Line(CoordsBase):
+class Line(CoordsBaseActor):
     def get_expected_args(self):
         return ('(comp)','x_start', 'y_start', 'z_start', 'x_end', 'y_end', 'z_end', 'radius')
 
@@ -246,7 +247,7 @@ class Line(CoordsBase):
 
 
 # Creates a 3d cylinder from (xs,ys,zs) to (xe,ye,ze)
-class CylinderOriented(CoordsBase):
+class CylinderOriented(CoordsBaseActor):
     def get_expected_args(self):
         return ('(comp)','x_start', 'y_start', 'z_start', 'x_end', 'y_end', 'z_end', 'radius')
 
@@ -299,7 +300,7 @@ class CylinderOriented(CoordsBase):
 
 
 # Creates a 3d arrow pointing from (xs,ys,zs) to (xe,ye,ze)
-class ArrowOriented(CoordsBase):
+class ArrowOriented(CoordsBaseActor):
     def get_expected_args(self):
         return ('(comp)','x_start', 'y_start', 'z_start', 'x_end', 'y_end', 'z_end', 'radius')
 
@@ -394,7 +395,7 @@ def make_reader(file_name):
 
 
 # Loads 3D geometry from file
-class ReadPolyData(CoordsBase):
+class ReadPolyData(CoordsBaseActor):
     def get_expected_args(self):
         return ('(comp)','filename','path')
 
@@ -410,7 +411,13 @@ class ReadPolyData(CoordsBase):
             filepath = path + filename
             mapper = vtk.vtkPolyDataMapper()
             if not os.path.isfile(filepath):
-                print('Vtk_Vismach HalReadPolyData Error: Unable to read file ', filepath)
+                # If the file is not there we want to print a message, but only once
+                if not hasattr(self, 'error_filepath'):
+                    print('Vtk_Vismach Error: Unable to read file ', filepath)
+                else:
+                    if filepath != self.error_filepath:
+                        print('Vtk_Vismach Error: Unable to read file ', filepath)
+                self.error_filepath = filepath
                 # create a dummy sphere instead
                 sphereSource = vtk.vtkSphereSource()
                 sphereSource.SetCenter(0.0, 0.0, 0.0)
@@ -426,103 +433,30 @@ class ReadPolyData(CoordsBase):
             self.GetProperty().SetBackfaceCulling(1)
 
 
-# Draws a polyline showing the path of 'tooltip' with respect to 'work'
-class Plotter(vtk.vtkActor):
-    def __init__(self, comp, work, tooltip, clear, color='magenta'):
-        self.comp = comp            # instance of the halcomponent used in the model
-        self.tooltip = tooltip      # Capture object with '.matrix' holding the current transformation tool->world
-        self.work = work            # Capture object with '.matrix' holding the current transformation work->world
-        self.clear = clear          # halpin that clears the backplot
-        self.color = color          # color of backplot in eiter nomalized RGB or one of vtkNamedColors
-        # We initialize at the origin, this is cleared and set to the actual
-        # machine reference position during the 1. update loop
-        self.setup_points([0,0,0])
-        self.initial_run = True
-
-    def setup_points(self, pos):
-        self.index = 0
-        self.num_points = 2
-        self.points = vtk.vtkPoints()
-        self.points.InsertNextPoint(pos)
-        self.lines = vtk.vtkCellArray()
-        self.lines.InsertNextCell(1)  # number of points
-        self.lines.InsertCellPoint(0)
-        self.lines_poligon_data = vtk.vtkPolyData()
-        self.lines_poligon_data.SetPoints(self.points)
-        self.lines_poligon_data.SetLines(self.lines)
-        colors = vtk.vtkNamedColors()
-        self.GetProperty().SetColor(colors.GetColor3d(self.color))
-        self.GetProperty().SetLineWidth(2.5)
-        self.GetProperty().SetOpacity(0.5)
-        mapper = vtk.vtkPolyDataMapper()
-        mapper.SetInputData(self.lines_poligon_data)
-        mapper.Update()
-        self.SetMapper(mapper)
-
-    def update(self):
-        tool2world = vtk.vtkTransform()
-        tool2world.Concatenate(self.tooltip.current_matrix)
-        #world2tool = vtk.vtkTransform()
-        #world2tool = tool2world.GetInverse()
-        work2world = vtk.vtkTransform()
-        work2world.Concatenate(self.work.current_matrix)
-        world2work = vtk.vtkTransform()
-        world2work = work2world.GetInverse()
-        plot_transform = vtk.vtkTransform()
-        plot_transform.Concatenate(world2work) # work position [0,0,0] > World [0,y,0]
-        plot_transform.Concatenate(tool2world) # tool position [0,0,0] > World [x,0,z]
-        x = plot_transform.GetMatrix().GetElement(0,3)
-        y = plot_transform.GetMatrix().GetElement(1,3)
-        z = plot_transform.GetMatrix().GetElement(2,3)
-        current_position = (x, y, z)
-        clear = self.comp[self.clear] if self.comp else hal.get_value(self.clear)
-        if self.comp[self.clear] or self.initial_run:
-            self.points.Reset()
-            self.setup_points([x,y,z])
-            self.initial_run = False
-        self.index += 1
-        self.points.InsertNextPoint(current_position)
-        self.points.Modified()
-        self.lines.InsertNextCell(self.num_points)
-        self.lines.InsertCellPoint(self.index - 1)
-        self.lines.InsertCellPoint(self.index)
-        self.lines.Modified()
-        self.SetUserTransform(vtk.vtkTransform())
-        self.GetUserTransform().Concatenate(work2world)
-        # Calculate tool2work to experiment
-        self.tool2work = vtk.vtkTransform()
-        self.tool2work.Concatenate(world2work)
-        self.tool2work.Concatenate(tool2world) # tool position [0,0,0] > Work [x,y,z]
-
-
-# create (invisible) actor that can be used to track combined transformation to world coordinates
-class Capture(vtk.vtkActor):
-    def __init__(self):
-        self.SetUserTransform(vtk.vtkTransform())
-        self.current_matrix = self.GetMatrix()
-        self.tracked_parts = [self]
-
-    def update(self):
-        self.current_matrix = self.GetMatrix()            # store the total transformation from this cycle
-        self.SetUserTransform(vtk.vtkTransform()) # reset tranform for next update cycle
-
-
 # Create a trihedron indicating coordinate orientation
-class Axes(vtk.vtkAxesActor):
-    def __init__(self, scale=50, radius_factor=0.5, label_x='X', label_y='Y', label_z='Z',):
+class Axes(CoordsBaseAssembly):
+    def get_expected_args(self):
+        return ('(comp)','scale')
+
+    def create (self):
         self.SetUserTransform(vtk.vtkTransform())
-        self.SetXAxisLabelText(label_x) #FIXME Labels are not shown (seems to be a bug in vtk)
-        self.SetYAxisLabelText(label_y)
-        self.SetZAxisLabelText(label_z)
-        self.SetShaftTypeToCylinder()
-        self.SetCylinderRadius(radius_factor*self.GetCylinderRadius())
-        self.SetConeRadius(radius_factor*self.GetConeRadius())
-        self.SetScale(scale,scale,scale)
+        radius_factor = 0.5
+        self.axesActor = vtk.vtkAxesActor()
+        self.axesActor.SetShaftTypeToCylinder()
+        self.axesActor.SetCylinderRadius(radius_factor*self.axesActor.GetCylinderRadius())
+        self.axesActor.SetConeRadius(radius_factor*self.axesActor.GetConeRadius())
+        self.AddPart(self.axesActor)
+
+    def update(self):
+        if self.needs_updates or self.first_update:
+            self.first_update = False
+            scale = self.coords()
+            self.axesActor.SetScale(scale,scale,scale)
 
 
 # draw a grid defined by it's normal vector(zx,zy,zz) and x-direction vector(xx, xy, xz)
 # optional s to define the half-width from the origin (ox,oy,oz)
-class GridFromNormalAndDirection(CoordsBase_assy):
+class GridFromNormalAndDirection(CoordsBaseAssembly):
     def get_expected_args(self):
         return ('(comp)','ox','oy','oz','xx','xy','xz','zx','zy','zz','s')
 
@@ -567,26 +501,28 @@ class GridFromNormalAndDirection(CoordsBase_assy):
             self.AddPart(line)
 
     def update(self):
-        ox, oy, oz, xx, xy, xz, zx, zy, zz, self.s = self.coords()
-        vo = [ox, oy, oz]
-        vx = [xx, xy, xz]
-        vz = [zx, zy, zz]
-        # calculate the missing y vector
-        vy = [yx, yy, yz] = self.cross(vz,vx)
-        matrix = [[ xx, yx, zx, ox],
-                  [ xy, yy, zy, oy],
-                  [ xz, yz, zz, oz],
-                  [  0,  0,  0,       1]]
-        transform_matrix = vtk.vtkMatrix4x4()
-        for column in range (0,4):
-            for row in range (0,4):
-                transform_matrix.SetElement(column, row, matrix[column][row])
-        self.SetUserMatrix(transform_matrix)
+        if self.needs_updates or self.first_update:
+            self.first_update = False
+            ox, oy, oz, xx, xy, xz, zx, zy, zz, self.s = self.coords()
+            vo = [ox, oy, oz]
+            vx = [xx, xy, xz]
+            vz = [zx, zy, zz]
+            # calculate the missing y vector
+            vy = [yx, yy, yz] = self.cross(vz,vx)
+            matrix = [[ xx, yx, zx, ox],
+                    [ xy, yy, zy, oy],
+                    [ xz, yz, zz, oz],
+                    [  0,  0,  0,       1]]
+            transform_matrix = vtk.vtkMatrix4x4()
+            for column in range (0,4):
+                for row in range (0,4):
+                    transform_matrix.SetElement(column, row, matrix[column][row])
+            self.SetUserMatrix(transform_matrix)
 
 
 # draw a coordinate system defined by it's normal vector(zx,zy,zz) and x-direction vector(xx, xy, xz)
 # optional r to define the thickness of the cylinders
-class CoordsFromNormalAndDirection(CoordsBase_assy):
+class CoordsFromNormalAndDirection(CoordsBaseAssembly):
     def get_expected_args(self):
         return ('(comp)','ox','oy','oz','xx','xy','xz','zx','zy','zz','scale')
 
@@ -606,21 +542,23 @@ class CoordsFromNormalAndDirection(CoordsBase_assy):
         self.SetUserTransform(vtk.vtkTransform())
 
     def update(self):
-        ox, oy, oz, xx, xy, xz, zx, zy, zz, s = self.coords()
-        vo = [ox, oy, oz]
-        vx = [xx, xy, xz]
-        vz = [zx, zy, zz]
-        # calculate the missing y vector
-        vy = [yx, yy, yz] = self.cross(vz,vx)
-        matrix = [[ xx, yx, zx, ox],
-                  [ xy, yy, zy, oy],
-                  [ xz, yz, zz, oz],
-                  [  0,  0,  0,  1]]
-        transform_matrix = vtk.vtkMatrix4x4()
-        for column in range (0,4):
-            for row in range (0,4):
-                transform_matrix.SetElement(column, row, matrix[column][row])
-        self.SetUserMatrix(transform_matrix)
+        if self.needs_updates or self.first_update:
+            self.first_update = False
+            ox, oy, oz, xx, xy, xz, zx, zy, zz, s = self.coords()
+            vo = [ox, oy, oz]
+            vx = [xx, xy, xz]
+            vz = [zx, zy, zz]
+            # calculate the missing y vector
+            vy = [yx, yy, yz] = self.cross(vz,vx)
+            matrix = [[ xx, yx, zx, ox],
+                    [ xy, yy, zy, oy],
+                    [ xz, yz, zz, oz],
+                    [  0,  0,  0,  1]]
+            transform_matrix = vtk.vtkMatrix4x4()
+            for column in range (0,4):
+                for row in range (0,4):
+                    transform_matrix.SetElement(column, row, matrix[column][row])
+            self.SetUserMatrix(transform_matrix)
 
 
 class Collection(vtk.vtkAssembly):
@@ -635,13 +573,20 @@ class Collection(vtk.vtkAssembly):
                     self.tracked_parts = []
                 self.tracked_parts += part.tracked_parts
         parse_arguments(self, has_parts, args)
+        if hasattr(self, "create"):
+            self.create()
+        # We cannot wait for the 1. update cycle because camera needs something to set the view on startup
+        if hasattr(self, "update"):
+            self.update()
 
     def coords(self):
         return list(map(self._coord, self._coords))
 
     def _coord(self, v):
-        s=1
+        s = 1 # default scale factor
         if isinstance(v,tuple):
+            if len(v) > 2: # RGB color
+                return v
             # tuple syntax has been used, ie (<halpin_name>, scalefactor)
             tup = v
             v = tup[0]
@@ -651,6 +596,8 @@ class Collection(vtk.vtkAssembly):
         elif isinstance(v, str) and isinstance(self.comp,type(hal)):
             return s*hal.get_value(v)
         else:
+            if isinstance(v,str): # eg a color string from 'Color()'
+                return v
             return s*v
 
     def capture(self):
@@ -693,32 +640,35 @@ class Rotate(Collection):
 
 class Color(Collection):
     # Color property needs to be set in each individual actor in the vtkAssembly, parts that have been created by # a transformation (eg Translate(), Rotate(), Scale()) will always inherit and change with the parent part.
-    def __init__(self, parts, color, opacity=1):
-        super().__init__(parts)
-        self.color = color # either name string (eg 'red','magenta') or normalized RGB as tuple (eg (0.7,0.7,0.1))
-        self.opacity = opacity
+    def get_expected_args(self):
+        return ('[parts]','(comp)','color', 'opacity')
+
+    def create (self):
         def find_actors(parts):
-            colors = vtk.vtkNamedColors()
             if hasattr(parts, 'GetParts'):
                 for item in parts.GetParts():
                     if isinstance(item, vtk.vtkActor):
-                        if not isinstance(self.color, tuple):
-                            item.GetProperty().SetColor(colors.GetColor3d(self.color))
-                        else:
-                            item.GetProperty().SetColor(self.color)
-                        item.GetProperty().SetOpacity(self.opacity)
-                        #item.GetProperty().EdgeVisibilityOn()
-                        #item.GetProperty().SetRepresentationToWireframe()
+                        self.parts_to_update.append(item)
                     elif isinstance(item, vtk.vtkAssembly):
                         find_actors(item)
             else:
-                if not isinstance(self.color, tuple):
-                    parts.GetProperty().SetColor(colors.GetColor3d(self.color))
-                else:
-                    parts.GetProperty().SetColor(self.color)
-                parts.GetProperty().SetOpacity(self.opacity)
+                self.parts_to_update.append(parts)
+        self.parts_to_update = []
         for part in self.GetParts():
             find_actors(part)
+
+    def update(self):
+        if self.needs_updates or self.first_update:
+            self.first_update = False
+            colors = vtk.vtkNamedColors()
+            print("self.coords(): ", self.coords())
+            color, opacity = self.coords()
+            for part in self.parts_to_update:
+                if not isinstance(color, tuple):
+                    part.GetProperty().SetColor(colors.GetColor3d(color))
+                else:
+                    part.GetProperty().SetColor(color)
+                part.GetProperty().SetOpacity(opacity)
 
 
 class RotateEuler(Collection):
@@ -803,6 +753,87 @@ class Scale(Collection):
                 self.SetScale(s_t,s_t,s_t)
             else:
                 self.SetScale(s_f,s_f,s_f)
+
+
+# Draws a polyline showing the path of 'tooltip' with respect to 'work'
+class Plotter(vtk.vtkActor):
+    def __init__(self, comp, work, tooltip, clear, color='magenta'):
+        self.comp = comp            # instance of the halcomponent used in the model
+        self.tooltip = tooltip      # Capture object with '.matrix' holding the current transformation tool->world
+        self.work = work            # Capture object with '.matrix' holding the current transformation work->world
+        self.clear = clear          # halpin that clears the backplot
+        self.color = color          # color of backplot in eiter nomalized RGB or one of vtkNamedColors
+        # We initialize at the origin, this is cleared and set to the actual
+        # machine reference position during the 1. update loop
+        self.setup_points([0,0,0])
+        self.initial_run = True
+
+    def setup_points(self, pos):
+        self.index = 0
+        self.num_points = 2
+        self.points = vtk.vtkPoints()
+        self.points.InsertNextPoint(pos)
+        self.lines = vtk.vtkCellArray()
+        self.lines.InsertNextCell(1)  # number of points
+        self.lines.InsertCellPoint(0)
+        self.lines_poligon_data = vtk.vtkPolyData()
+        self.lines_poligon_data.SetPoints(self.points)
+        self.lines_poligon_data.SetLines(self.lines)
+        colors = vtk.vtkNamedColors()
+        self.GetProperty().SetColor(colors.GetColor3d(self.color))
+        self.GetProperty().SetLineWidth(2.5)
+        self.GetProperty().SetOpacity(0.5)
+        mapper = vtk.vtkPolyDataMapper()
+        mapper.SetInputData(self.lines_poligon_data)
+        mapper.Update()
+        self.SetMapper(mapper)
+
+    def update(self):
+        tool2world = vtk.vtkTransform()
+        tool2world.Concatenate(self.tooltip.current_matrix)
+        #world2tool = vtk.vtkTransform()
+        #world2tool = tool2world.GetInverse()
+        work2world = vtk.vtkTransform()
+        work2world.Concatenate(self.work.current_matrix)
+        world2work = vtk.vtkTransform()
+        world2work = work2world.GetInverse()
+        plot_transform = vtk.vtkTransform()
+        plot_transform.Concatenate(world2work) # work position [0,0,0] > World [0,y,0]
+        plot_transform.Concatenate(tool2world) # tool position [0,0,0] > World [x,0,z]
+        x = plot_transform.GetMatrix().GetElement(0,3)
+        y = plot_transform.GetMatrix().GetElement(1,3)
+        z = plot_transform.GetMatrix().GetElement(2,3)
+        current_position = (x, y, z)
+        clear = self.comp[self.clear] if self.comp else hal.get_value(self.clear)
+        if self.comp[self.clear] or self.initial_run:
+            self.points.Reset()
+            self.setup_points([x,y,z])
+            self.initial_run = False
+        self.index += 1
+        self.points.InsertNextPoint(current_position)
+        self.points.Modified()
+        self.lines.InsertNextCell(self.num_points)
+        self.lines.InsertCellPoint(self.index - 1)
+        self.lines.InsertCellPoint(self.index)
+        self.lines.Modified()
+        self.SetUserTransform(vtk.vtkTransform())
+        self.GetUserTransform().Concatenate(work2world)
+        # Calculate tool2work to experiment
+        self.tool2work = vtk.vtkTransform()
+        self.tool2work.Concatenate(world2work)
+        self.tool2work.Concatenate(tool2world) # tool position [0,0,0] > Work [x,y,z]
+
+
+# create (invisible) actor that can be used to track combined transformation to world coordinates
+class Capture(vtk.vtkActor):
+    def __init__(self):
+        self.SetUserTransform(vtk.vtkTransform())
+        self.current_matrix = self.GetMatrix()
+        self.tracked_parts = [self]
+
+    def update(self):
+        self.current_matrix = self.GetMatrix()            # store the total transformation from this cycle
+        self.SetUserTransform(vtk.vtkTransform()) # reset tranform for next update cycle
 
 
 # Create a text overlay (HUD)

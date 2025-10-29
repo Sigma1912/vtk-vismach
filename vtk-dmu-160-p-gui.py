@@ -7,7 +7,9 @@ import sys
 
 # get current working directory
 cwd =  os.getcwd()
+# define path for machine model files
 path_stl = cwd + "/vismach-stl-files/"
+# define path for tool model files
 path_tool_stl = cwd + "/vismach-stl-files/tools/"
 
 try: # Expect files in working directory
@@ -22,7 +24,7 @@ try: # Expect files in working directory
     EGO_Z = ReadPolyData('160PZ.stl', path_stl)
 except Exception as detail:
     print(detail)
-    raise SystemExit('vtk-dmu-160-p-gui requires stl files in working directory')
+    raise SystemExit('Vismach requires 3d files in working directory')
 
 #for setting in sys.argv[1:]: exec(setting)
 
@@ -85,7 +87,7 @@ c.newpin('rot_th3', hal.HAL_FLOAT, hal.HAL_IN)
 c.ready()
 
 
-# used to rotate parts around the nutation axis
+# custom subclass used to rotate parts around the nutation axis
 class Nutate(Collection):
     def update(self):
         th,x,y,z = self.coords()
@@ -107,14 +109,14 @@ machine_zero_y =  1000
 machine_zero_z =  1000
 
 # Create an indicator for the machine reference coordinates
-machine_axes = Axes(scale=200)
+machine_axes = Axes(c,('scale_coords',200))
 machine_axes = Translate([machine_axes], machine_zero_x, 0, machine_zero_z)
 
 # start toolside
 # Create the tooltip tracker (tool control point)
 tooltip = Capture()
 # Create an indicator for the tool coordinates
-tool_axes = Axes(scale=100)
+tool_axes = Axes(100)
 tool_shape = Collection([
                 CylinderZ(hal,'motion.tooloffset.z', ('halui.tool.diameter', 0.5)),
                 # this indicates the spindle nose when no tool-offset is active
@@ -123,7 +125,7 @@ tool_shape = Collection([
 #tool_stl = ReadPolyData(hal,"halui.tool.number", path_tool_stl)
 tool_stl = ReadPolyData(c,"tool_number", path_tool_stl)
 tool_stl = Rotate([tool_stl],180,0,1,0)
-tool_stl = Color([tool_stl],"magenta")
+tool_stl = Color([tool_stl],"magenta",1)
 tool_stl = Translate([tool_stl],hal,0,0,'motion.tooloffset.z')
 tool = Collection([
                     tooltip,
@@ -180,34 +182,26 @@ spindle_xz = Translate([spindle_xz], machine_zero_x, 0, 0)
 # Create the work tracker (top center of the rotary table)
 work = Capture()
 # Create an indicator for the tool coordinates
-work_axes = Axes(scale=100)
+work_axes = Axes(100)
 # Create an indicator for the defined Tilted Work Plane (TWP)
-work_plane_defined =  GridFromNormalAndDirection(c,
-        'twp_ox', 'twp_oy', 'twp_oz',
-        'twp_xx', 'twp_xy', 'twp_xz',
-        'twp_zx', 'twp_zy', 'twp_zz',
-        300
-        )
+# We can reuse the same arguments here
+workplane_args = (c,
+                'twp_ox', 'twp_oy', 'twp_oz',
+                'twp_xx', 'twp_xy', 'twp_xz',
+                'twp_zx', 'twp_zy', 'twp_zz',
+                300
+                )
+work_plane_defined=  GridFromNormalAndDirection(*workplane_args)
 # for twp-defined = true, we show the plane in gray
 work_plane_defined = Color([work_plane_defined],(0.7,0.7,0.7),0.3)
 work_plane_defined = Scale([work_plane_defined],c,0,'twp_active',1,0)
 # Create an indicator for the active Tilted Work Plane (TWP), same as active but with different color
-work_plane_active =  GridFromNormalAndDirection(c,
-        'twp_ox', 'twp_oy', 'twp_oz',
-        'twp_xx', 'twp_xy', 'twp_xz',
-        'twp_zx', 'twp_zy', 'twp_zz',
-        300
-        )
+work_plane_active =  GridFromNormalAndDirection(*workplane_args)
 # for twp-active = true, we show the plane in pink
 work_plane_active = Color([work_plane_active],(1,0,1),0.3)
 work_plane_active = Scale([work_plane_active],c,1,'twp_active',1,0)
 # Create a coordinate system for the twp-plane
-work_plane_coords =  CoordsFromNormalAndDirection(c,
-        'twp_ox', 'twp_oy', 'twp_oz',
-        'twp_xx', 'twp_xy', 'twp_xz',
-        'twp_zx', 'twp_zy', 'twp_zz',
-        300
-        )
+work_plane_coords =  CoordsFromNormalAndDirection(*workplane_args)
 work_plane = Collection([work_plane_defined, work_plane_active, work_plane_coords])
 # make the work_plane hidable
 work_plane = Scale([work_plane],c,1,'twp_defined',1,0)
