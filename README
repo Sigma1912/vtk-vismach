@@ -3,6 +3,27 @@ Notes:
 - Syntax from the current (opengl) version of vismach has been used as much as possible but some changes are necessary
 - vtk-vismach supports dynamic loading of 3D geometry (eg loading specific files depending on the number of the loaded tool)
 
-- For further information see comments in the files
+
+Box((comp),x1, y1, z1, x2, y2, z2)
+BoxCentered(((comp),x_width, y_width, z_width)
+Sphere((comp),x_center, y_center, z_center, radius)
+CylinderX((comp),length, radius)
+CylinderY((comp),length, radius)
+CylinderZ((comp),length, radius)
+Line((comp),x_start, y_start, z_start, x_end, y_end, z_end, radius)
+Cylinder((comp),x_start, y_start, z_start, x_end, y_end, z_end, radius)
+Arrow((comp),x_start, y_start, z_start, x_end, y_end, z_end, radius)
 
 
+ReadPolyData((comp), filename, path)
+Axes((comp), scale)
+GridFromNormalAndDirection((comp),x_origin, y_origin, z_origin, xx, xy, xz, zx, zy, zz, scale)
+CoordsFromNormalAndDirection((comp),x_origin, y_origin, z_origin, xx, xy, xz, zx, zy, zz, scale)
+
+Collection([parts])
+Translate([parts], (comp), x, y, z)
+Rotate([parts], (comp), th, x, y, z)
+Scale([parts], (comp), const, var, scalefactor_if_true, scalefactor_if_false)
+Color([parts], (comp), vtk_color, opacity)
+Color([parts], (comp), red, green, blue, opacity) # ie normalized R,G,B,A
+EulerRotate([parts], (comp), order, th1, th2, th3)
