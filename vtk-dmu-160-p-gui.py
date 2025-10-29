@@ -123,22 +123,22 @@ tool_shape = Collection([
                 CylinderZ(-0.1, 0),
                 ])
 #tool_stl = ReadPolyData(hal,"halui.tool.number", path_tool_stl)
-tool_stl = ReadPolyData(c,"tool_number", path_tool_stl)
-tool_stl = Rotate([tool_stl],180,0,1,0)
-tool_stl = Color([tool_stl],"magenta",1)
-tool_stl = Translate([tool_stl],hal,0,0,'motion.tooloffset.z')
+#tool_stl = ReadPolyData(c,"tool_number", path_tool_stl)
+#tool_stl = Rotate([tool_stl],180,0,1,0)
+#tool_stl = Color([tool_stl],"magenta",1)
+#tool_stl = Translate([tool_stl],hal,0,0,'motion.tooloffset.z')
 tool = Collection([
                     tooltip,
                     tool_axes,
                     tool_shape,
-                    tool_stl,
+#                    tool_stl,
                     ])
 tool = Rotate([tool],c,'virtual_rotation',0,0,1)
 tool = Translate([tool],hal,0,0,('motion.tooloffset.z',-1))
 tool = Translate([tool],c,0,('pivot_y',-1),('pivot_z',-1))
-tool = Color([tool],(1,0,1),1)
+tool = Color([tool],1,0,1,1)
 # create spindle head
-EGO_B = Color([EGO_B],(0.7,0.7,0),1)
+EGO_B = Color([EGO_B],0.7,0.7,0,1)
 # rotate the nutation joint to the nutation angle, 90° should have the nutation axis in the horizontal plane
 EGO_B = Rotate([EGO_B],-90,-1,0,0)
 EGO_B = Rotate([EGO_B],c,'nutation_angle',-1,0,0)
@@ -154,7 +154,7 @@ spindle_assembly = Collection([
 # create HAL-link for b-axis rotational joint'
 spindle_assembly = Nutate([spindle_assembly],hal,'joint.3.pos-fb',0,-1,0)
 # Z carriage
-EGO_Z = Color([EGO_Z],(1,0.5,0),1)
+EGO_Z = Color([EGO_Z],1,0.5,0,1)
 EGO_Z = Translate([EGO_Z], 0, 0, -759.5)
 spindle_z = Collection([
              spindle_assembly,
@@ -167,7 +167,7 @@ spindle_z = Translate([spindle_z],hal,0,0,'joint.2.pos-fb')
 # move spindle_z to z-home position
 spindle_z = Translate([spindle_z], 0, 0, machine_zero_z)
 # x carriage
-EGO_X = Color([EGO_X],(0.6,0.8,0.3),1)
+EGO_X = Color([EGO_X],0.6,0.8,0.3,1)
 spindle_xz = Collection([
              spindle_z,
              EGO_X
@@ -193,12 +193,12 @@ workplane_args = (c,
                 )
 work_plane_defined=  GridFromNormalAndDirection(*workplane_args)
 # for twp-defined = true, we show the plane in gray
-work_plane_defined = Color([work_plane_defined],(0.7,0.7,0.7),0.3)
+work_plane_defined = Color([work_plane_defined],0.7,0.7,0.7,0.3)
 work_plane_defined = Scale([work_plane_defined],c,0,'twp_active',1,0)
 # Create an indicator for the active Tilted Work Plane (TWP), same as active but with different color
 work_plane_active =  GridFromNormalAndDirection(*workplane_args)
 # for twp-active = true, we show the plane in pink
-work_plane_active = Color([work_plane_active],(1,0,1),0.3)
+work_plane_active = Color([work_plane_active],1,0,1,0.3)
 work_plane_active = Scale([work_plane_active],c,1,'twp_active',1,0)
 # Create a coordinate system for the twp-plane
 work_plane_coords =  CoordsFromNormalAndDirection(*workplane_args)
@@ -211,7 +211,7 @@ work_piece = Translate([work_piece],0,0,300)
 # Make the work piece hidable
 work_piece = Scale([work_piece],c,True,'hide_work_piece_1',0,1)
 # Create rotary table
-EGO_C = Color([EGO_C],(0.1,0.7,0.9),1)
+EGO_C = Color([EGO_C],0.1,0.7,0.9,1)
 rotary_table_c = Collection([
                  work_piece,
                  EGO_C,
@@ -222,7 +222,7 @@ rotary_table_c = Collection([
 # Rotary table and work roatae with axis C'
 rotary_table_c = Rotate([rotary_table_c],hal,'joint.4.pos-fb',0,0,-1)
 # y-carriage that carries the rotary table
-EGO_Y = Color([EGO_Y],(0.2,0.2,0.2),1)
+EGO_Y = Color([EGO_Y],0.2,0.2,0.2,1)
 table = Collection([
         rotary_table_c,
         EGO_Y
@@ -235,7 +235,7 @@ table = Translate([table], 0, -machine_zero_y, 0)
 #/work-side
 
 # Create machine base
-base = Color([EGO_BC],(0.3,0.3,0.3),1)
+base = Color([EGO_BC],c,0.3,0.3,0.3,1)
 
 arrow = ArrowOriented(hal, machine_zero_x, 0,-machine_zero_z,0,('vismach.work_pos_y',1),0,50)
 #arrow = Translate_orig([arrow], machine_zero_x, 0, machine_zero_z)

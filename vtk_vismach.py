@@ -22,7 +22,14 @@ def parse_arguments(self, has_parts, args):
     # check number of arguments against expected number, need to adjust for '[parts]' and '(comp)'
     args_count = len(args) + has_parts + 1
     if hasattr(self, 'get_expected_args'):
-        if args_count != len(self.get_expected_args()):
+        args_expected = self.get_expected_args()
+        # if a class accepts more than one combination of arguments it will return them in a list
+        if not isinstance(args_expected,list):
+            args_expected = [args_expected]
+        # check if number of passed args match any of the possibilities returned
+        res = [args_count == len(a) for a in args_expected]
+        if not any(res):
+            # if none match we raise an error
             raise ValueError('Expected arguments are', self.get_expected_args())
     self._coords = args
     # prepare so at least the first update is run as instances with static values are not updated after
@@ -639,9 +646,10 @@ class Rotate(Collection):
 
 
 class Color(Collection):
-    # Color property needs to be set in each individual actor in the vtkAssembly, parts that have been created by # a transformation (eg Translate(), Rotate(), Scale()) will always inherit and change with the parent part.
+    # Color property needs to be set in each individual actor in the vtkAssembly, parts that have been created by 
+    # a transformation (eg Translate(), Rotate(), Scale()) will always inherit and change with the parent part.
     def get_expected_args(self):
-        return ('[parts]','(comp)','color', 'opacity')
+        return [('[parts]','(comp)','color', 'opacity'),('[parts]','(comp)','red','green','blue','opacity')]
 
     def create (self):
         def find_actors(parts):
@@ -660,11 +668,15 @@ class Color(Collection):
     def update(self):
         if self.needs_updates or self.first_update:
             self.first_update = False
-            colors = vtk.vtkNamedColors()
-            print("self.coords(): ", self.coords())
-            color, opacity = self.coords()
+            args = self.coords() # can be (r,g,b,a) or (color,a)
+            if isinstance(args[0],str):  # ie (color, a) has been passed
+                color, opacity = args
+            else:
+                color = (args[0],args[1],args[2])
+                opacity = args[3]
             for part in self.parts_to_update:
                 if not isinstance(color, tuple):
+                    colors = vtk.vtkNamedColors()
                     part.GetProperty().SetColor(colors.GetColor3d(color))
                 else:
                     part.GetProperty().SetColor(color)
