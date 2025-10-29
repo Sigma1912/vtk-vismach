@@ -11,47 +11,19 @@ from PyQt5 import Qt
 from PyQt5.QtCore import QTimer
 
 
-def update_passed_args(self, v):
-    v = getattr(self,v)
-    s = 1
-    if isinstance(v,tuple):
-        # tuple syntax has been used, ie (<halpin_name>, scalefactor)
-        tup =v
-        v = tup[0]
-        s = tup[1]
-    if isinstance(v, str):
-        # class variable of the same name is a string (ie a pinname)
-        halpin = v
-        if isinstance(self.comp, hal.component):
-            # if the component has been passed then we need to get the value using that
-            var = self.comp[halpin]
-        elif isinstance(self.comp,type(hal)):
-            # if the comp variable is None then we need to get the value through hal
-            var = hal.get_value(halpin)
-        else:
-            print("Error: Unrecognized module ", self.comp)
-    else:
-        # class variable of the same name is not a string (ie a constant value)
-        var = v
-    return s*var
-
-
-def parse_arguments(self, args):
-    if args and isinstance(args[0], hal.component): # global halpin passed
-        self.comp = args[0]
-        args = args[1:]
-        self.needs_updates = True
-    elif args and isinstance(args[0],type(hal)): # local halpin passed
+def parse_arguments(self, has_parts, args):
+    if args and (isinstance(args[0], hal.component) or isinstance(args[0],type(hal))): #halpin passed
         self.comp = args[0]
         args = args[1:]
         self.needs_updates = True
     else:  # no halpin passed
         self.comp = None
         self.needs_updates = False
-    # check number of arguments against expected number
-    if hasattr(self, "get_info"):
-        if len(args) != len(self.get_info()):
-            raise ValueError('Expected arguments are', self.get_info())
+    # check number of arguments against expected number, need to adjust for '[parts]' and '(comp)'
+    args_count = len(args) + has_parts + 1
+    if hasattr(self, 'get_expected_args'):
+        if args_count != len(self.get_expected_args()):
+            raise ValueError('Expected arguments are', self.get_expected_args())
     self._coords = args
     # prepare so at least the first update is run as instances with static values are not updated after
     self.first_update = True
@@ -59,10 +31,17 @@ def parse_arguments(self, args):
 
 class CoordsBase(vtk.vtkActor):
     def __init__(self, *args):
-        parse_arguments(self, args)
+        has_parts = False # used to adjust the number of expected arguments
+        parse_arguments(self, has_parts, args)
         self.create()
+        # initial update for actors that do not need updates later.
+        # We cannot wait for the 1. update cycle because camera needs something to set the view on startup
+        if not self.needs_updates:
+            self.update()
 
     def coords(self):
+        if len(self._coords) == 1: # 'self._coords' is set in 'parse_arguments() it's args w/o comp'
+            return list(map(self._coord, self._coords))[0] # for a single argument
         return list(map(self._coord, self._coords))
 
     def _coord(self, v):
@@ -73,18 +52,27 @@ class CoordsBase(vtk.vtkActor):
             v = tup[0]
             s = tup[1]
         if isinstance(v, str) and isinstance(self.comp, hal.component):
+            if os.path.isdir(v):
+                return v
             return s*self.comp[v]
         elif isinstance(v, str) and isinstance(self.comp,type(hal)):
+            if os.path.isdir(v):
+                return v
             return s*hal.get_value(v)
         else:
+            if isinstance(v,str): # eg a filename from 'ReadPolyData()'
+                return v
             return s*v
 
 class CoordsBase_assy(vtk.vtkAssembly):
     def __init__(self, *args):
-        parse_arguments(self, args)
+        has_parts = False # used to adjust the number of expected arguments
+        parse_arguments(self, has_parts, args)
         self.create()
 
     def coords(self):
+        if len(self._coords) == 1: # 'self._coords' is set in 'parse_arguments() it's args w/o comp'
+            return list(map(self._coord, self._coords))[0]
         return list(map(self._coord, self._coords))
 
     def _coord(self, v):
@@ -103,8 +91,8 @@ class CoordsBase_assy(vtk.vtkAssembly):
 
 
 class Box(CoordsBase):
-    def get_info(self):
-        return ('x1', 'y1', 'z1', 'x2', 'y2', 'z2')
+    def get_expected_args(self):
+        return ('(comp)','x1', 'y1', 'z1', 'x2', 'y2', 'z2')
 
     def create(self, *args):
         self.cube = vtk.vtkCubeSource()
@@ -139,8 +127,8 @@ class Box(CoordsBase):
 # specify the width in X and Y, and the height in Z
 # the box is centered on the origin
 class BoxCentered(CoordsBase):
-    def get_info(self):
-        return ('xw', 'yw', 'zw')
+    def get_expected_args(self):
+        return ('(comp)','xw', 'yw', 'zw')
 
     def create(self, *args):
         self.cube = vtk.vtkCubeSource()
@@ -161,8 +149,8 @@ class BoxCentered(CoordsBase):
 # specify the width in X and Y, and the height in Z
 # the box is centered on the origin
 class Sphere(CoordsBase):
-    def get_info(self):
-        return ('x', 'y', 'z', 'r')
+    def get_expected_args(self):
+        return ('(comp)','x', 'y', 'z', 'r')
 
     def create(self, *args):
         self.sphere = vtk.vtkSphereSource()
@@ -181,8 +169,8 @@ class Sphere(CoordsBase):
 
 # Create cylinder along Y axis (default direction for vtkCylinderSource)
 class CylinderY(CoordsBase):
-    def get_info(self):
-        return ('length', 'radius')
+    def get_expected_args(self):
+        return ('(comp)','length', 'radius')
 
     def create(self, *args):
         self.resolution = 10
@@ -239,8 +227,8 @@ class CylinderX(CylinderY):
 
 # draw a line from point_1 to point_2
 class Line(CoordsBase):
-    def get_info(self):
-        return ('x_start', 'y_start', 'z_start', 'x_end', 'y_end', 'z_end', 'radius')
+    def get_expected_args(self):
+        return ('(comp)','x_start', 'y_start', 'z_start', 'x_end', 'y_end', 'z_end', 'radius')
 
     def create(self):
         self.lineSource = vtk.vtkLineSource()
@@ -259,8 +247,8 @@ class Line(CoordsBase):
 
 # Creates a 3d cylinder from (xs,ys,zs) to (xe,ye,ze)
 class CylinderOriented(CoordsBase):
-    def get_info(self):
-        return ('x_start', 'y_start', 'z_start', 'x_end', 'y_end', 'z_end', 'radius')
+    def get_expected_args(self):
+        return ('(comp)','x_start', 'y_start', 'z_start', 'x_end', 'y_end', 'z_end', 'radius')
 
     def create(self):
         self.resolution = 10
@@ -312,8 +300,8 @@ class CylinderOriented(CoordsBase):
 
 # Creates a 3d arrow pointing from (xs,ys,zs) to (xe,ye,ze)
 class ArrowOriented(CoordsBase):
-    def get_info(self):
-        return ('x_start', 'y_start', 'z_start', 'x_end', 'y_end', 'z_end', 'radius')
+    def get_expected_args(self):
+        return ('(comp)','x_start', 'y_start', 'z_start', 'x_end', 'y_end', 'z_end', 'radius')
 
     def create(self):
         self.resolution = 10
@@ -401,65 +389,46 @@ def make_reader(file_name):
         reader.Update()
         poly_data = reader.GetOutput()
     else:
-        print("ReadPolyData Error: Unable to read file ", file_name)
+        print('ReadPolyData Error: Unable to read file ', file_name)
     return reader
 
 
-# Loads 3D geometry on startup
-class ReadPolyData(vtk.vtkActor):
-    def __init__(self, geometry_file):
-        mapper = vtk.vtkPolyDataMapper()
-        if not os.path.isfile(geometry_file):
-            print("Vtk_Vismach HalReadPolyData Error: Unable to read file ", geometry_file)
-            # create a dummy sphere instead
-            sphereSource = vtk.vtkSphereSource()
-            sphereSource.SetCenter(0.0, 0.0, 0.0)
-            sphereSource.SetRadius(0.5)
-            mapper.SetInputConnection(sphereSource.GetOutputPort())
-        else:
-            # create from stl file
-            reader = make_reader(geometry_file)
-            mapper.SetInputConnection(reader.GetOutputPort())
-        self.SetMapper(mapper)
-        self.SetUserTransform(vtk.vtkTransform())
-        # Avoid visible backfaces on Linux with some video cards like intel
-        # From: https://stackoverflow.com/questions/51357630/vtk-rendering-not-working-as-expected-inside-pyqt?rq=1#comment89720589_51360335
-        self.GetProperty().SetBackfaceCulling(1)
-
-
-# Dynamically loads 3D geometry depending on the self.comp[self.var] value
-class HalReadPolyData(CoordsBase):
-    def get_info(self):
-        return ('file_number', 'directory')
+# Loads 3D geometry from file
+class ReadPolyData(CoordsBase):
+    def get_expected_args(self):
+        return ('(comp)','filename','path')
 
     def create(self):
         self.SetUserTransform(vtk.vtkTransform())
 
     def update(self):
-        file_nr, directory = self.coords()
-        filename = directory + str(file_nr) + ".stl"
-        # Create a mapper
-        mapper = vtk.vtkPolyDataMapper()
-        if not os.path.isfile(filename):
-            print("Vtk_Vismach HalReadPolyData Error: Unable to read file ", filename)
-            # create a dummy sphere instead
-            sphereSource = vtk.vtkSphereSource()
-            sphereSource.SetCenter(0.0, 0.0, 0.0)
-            sphereSource.SetRadius(0.5)
-            mapper.SetInputConnection(sphereSource.GetOutputPort())
-        else:
-            # create from stl file
-            reader = make_reader(filename)
-            mapper.SetInputConnection(reader.GetOutputPort())
-        self.SetMapper(mapper)
-        # Avoid visible backfaces on Linux with some video cards like intel
-        # From: https://stackoverflow.com/questions/51357630/vtk-rendering-not-working-as-expected-inside-pyqt?rq=1#comment89720589_51360335
-        self.GetProperty().SetBackfaceCulling(1)
+        if self.needs_updates or self.first_update:
+            self.first_update = False
+            filename, path = self.coords()
+            if not isinstance(filename,str): # ie filename is a numeric value from a halpin
+                filename = str(filename) + '.stl'
+            filepath = path + filename
+            mapper = vtk.vtkPolyDataMapper()
+            if not os.path.isfile(filepath):
+                print('Vtk_Vismach HalReadPolyData Error: Unable to read file ', filepath)
+                # create a dummy sphere instead
+                sphereSource = vtk.vtkSphereSource()
+                sphereSource.SetCenter(0.0, 0.0, 0.0)
+                sphereSource.SetRadius(0.5)
+                mapper.SetInputConnection(sphereSource.GetOutputPort())
+            else:
+                # create from stl file
+                reader = make_reader(filepath)
+                mapper.SetInputConnection(reader.GetOutputPort())
+            self.SetMapper(mapper)
+            # Avoid visible backfaces on Linux with some video cards like intel
+            # From: https://stackoverflow.com/questions/51357630/vtk-rendering-not-working-as-expected-inside-pyqt?rq=1#comment89720589_51360335
+            self.GetProperty().SetBackfaceCulling(1)
 
 
 # Draws a polyline showing the path of 'tooltip' with respect to 'work'
 class Plotter(vtk.vtkActor):
-    def __init__(self, comp, work, tooltip, clear, color="magenta"):
+    def __init__(self, comp, work, tooltip, clear, color='magenta'):
         self.comp = comp            # instance of the halcomponent used in the model
         self.tooltip = tooltip      # Capture object with '.matrix' holding the current transformation tool->world
         self.work = work            # Capture object with '.matrix' holding the current transformation work->world
@@ -540,7 +509,7 @@ class Capture(vtk.vtkActor):
 
 # Create a trihedron indicating coordinate orientation
 class Axes(vtk.vtkAxesActor):
-    def __init__(self, scale=50, radius_factor=0.5, label_x="X", label_y="Y", label_z="Z",):
+    def __init__(self, scale=50, radius_factor=0.5, label_x='X', label_y='Y', label_z='Z',):
         self.SetUserTransform(vtk.vtkTransform())
         self.SetXAxisLabelText(label_x) #FIXME Labels are not shown (seems to be a bug in vtk)
         self.SetYAxisLabelText(label_y)
@@ -553,9 +522,9 @@ class Axes(vtk.vtkAxesActor):
 
 # draw a grid defined by it's normal vector(zx,zy,zz) and x-direction vector(xx, xy, xz)
 # optional s to define the half-width from the origin (ox,oy,oz)
-class HalGridFromNormalAndDirection(CoordsBase_assy):
-    def get_info(self):
-        return ('ox','oy','oz','xx','xy','xz','zx','zy','zz','s')
+class GridFromNormalAndDirection(CoordsBase_assy):
+    def get_expected_args(self):
+        return ('(comp)','ox','oy','oz','xx','xy','xz','zx','zy','zz','s')
 
     def create (self):
         self.SetUserTransform(vtk.vtkTransform())
@@ -581,7 +550,7 @@ class HalGridFromNormalAndDirection(CoordsBase_assy):
             mapper1.SetInputConnection(lineSource.GetOutputPort())
             line.SetMapper(mapper1)
             line.GetProperty().SetLineWidth(self.r)
-            line.GetProperty().SetColor(colors.GetColor3d("Silver"))
+            line.GetProperty().SetColor(colors.GetColor3d('Silver'))
             self.AddPart(line)
             # create line in Y direction
             line = vtk.vtkActor()
@@ -594,7 +563,7 @@ class HalGridFromNormalAndDirection(CoordsBase_assy):
             mapper2.SetInputConnection(lineSource.GetOutputPort())
             line.SetMapper(mapper2)
             line.GetProperty().SetLineWidth(self.r)
-            line.GetProperty().SetColor(colors.GetColor3d("Silver"))
+            line.GetProperty().SetColor(colors.GetColor3d('Silver'))
             self.AddPart(line)
 
     def update(self):
@@ -617,9 +586,9 @@ class HalGridFromNormalAndDirection(CoordsBase_assy):
 
 # draw a coordinate system defined by it's normal vector(zx,zy,zz) and x-direction vector(xx, xy, xz)
 # optional r to define the thickness of the cylinders
-class HalCoordsFromNormalAndDirection(CoordsBase_assy):
-    def get_info(self):
-        return ('ox','oy','oz','xx','xy','xz','zx','zy','zz','scale')
+class CoordsFromNormalAndDirection(CoordsBase_assy):
+    def get_expected_args(self):
+        return ('(comp)','ox','oy','oz','xx','xy','xz','zx','zy','zz','scale')
 
     def cross(self, a, b):
         return [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]]
@@ -657,14 +626,15 @@ class HalCoordsFromNormalAndDirection(CoordsBase_assy):
 class Collection(vtk.vtkAssembly):
     def __init__(self, parts, *args):
         self.SetUserTransform(vtk.vtkTransform())
+        has_parts = True # used to adjust number of expected arguments
         # Collect parts
         for part in parts:
             self.AddPart(part)
-            if hasattr(part, "tracked_parts"):
-                if not hasattr(self, "tracked_parts"):
+            if hasattr(part, 'tracked_parts'):
+                if not hasattr(self, 'tracked_parts'):
                     self.tracked_parts = []
                 self.tracked_parts += part.tracked_parts
-        parse_arguments(self, args)
+        parse_arguments(self, has_parts, args)
 
     def coords(self):
         return list(map(self._coord, self._coords))
@@ -684,15 +654,15 @@ class Collection(vtk.vtkAssembly):
             return s*v
 
     def capture(self):
-        if hasattr(self, "tracked_parts"):
-            if hasattr(self, "transformation"):
+        if hasattr(self, 'tracked_parts'):
+            if hasattr(self, 'transformation'):
                 for tracked_part in self.tracked_parts:
                     tracked_part.GetUserTransform().Concatenate(self.transformation)
 
 
 class Translate(Collection):
-    def get_info(self):
-        return ("x","y","z")
+    def get_expected_args(self):
+        return ('[parts]','(comp)','x','y','z')
 
     def update(self):
         if self.needs_updates or self.first_update:
@@ -706,8 +676,8 @@ class Translate(Collection):
 
 
 class Rotate(Collection):
-    def get_info(self):
-        return ("th","x","y","z")
+    def get_expected_args(self):
+        return ('[parts]','(comp)','th','x','y','z')
 
     def update(self):
         if self.needs_updates or self.first_update:
@@ -722,13 +692,14 @@ class Rotate(Collection):
 
 
 class Color(Collection):
+    # Color property needs to be set in each individual actor in the vtkAssembly, parts that have been created by # a transformation (eg Translate(), Rotate(), Scale()) will always inherit and change with the parent part.
     def __init__(self, parts, color, opacity=1):
         super().__init__(parts)
-        self.color = color # either name string (eg "red","magenta") or normalized RGB as tuple (eg (0.7,0.7,0.1))
+        self.color = color # either name string (eg 'red','magenta') or normalized RGB as tuple (eg (0.7,0.7,0.1))
         self.opacity = opacity
         def find_actors(parts):
             colors = vtk.vtkNamedColors()
-            if hasattr(parts, "GetParts"):
+            if hasattr(parts, 'GetParts'):
                 for item in parts.GetParts():
                     if isinstance(item, vtk.vtkActor):
                         if not isinstance(self.color, tuple):
@@ -750,109 +721,94 @@ class Color(Collection):
             find_actors(part)
 
 
-class HalEulerRotate(Collection):
-    def __init__(self, part, comp, th1, th2, th3, order=123):
-        self.AddPart(part)
-        self.SetUserTransform(vtk.vtkTransform())
-        self.comp = comp
-        self.order = order
-        self.th1 = th1
-        self.th2 = th2
-        self.th3 = th3
+class RotateEuler(Collection):
+    def get_expected_args(self):
+        return ('[parts]','(comp)','order','th1','th2','th3')
 
     def update(self):
-        for v in ['order','th1','th2','th3']:
-            # create variable from list and update from class variables of the same name
-            globals()[v] = update_passed_args(self, v)
-        try:
-            order = str(int(self.comp[self.order]))
-        except:
-            order = str(int(self.order))
-        if order == '131':
-            rotation1 = (th1, 1, 0, 0)
-            rotation2 = (th2, 0, 0, 1)
-            rotation3 = (th3, 1, 0, 0)
-        elif order =='121':
-            rotation1 = (th1, 1, 0, 0)
-            rotation2 = (th2, 0, 1, 0)
-            rotation3 = (th3, 1, 0, 0)
-        elif order =='212':
-            rotation1 = (th1, 0, 1, 0)
-            rotation2 = (th2, 1, 0, 0)
-            rotation3 = (th3, 0, 1, 0)
-        elif order =='232':
-            rotation1 = (th1, 0, 1, 0)
-            rotation2 = (th2, 0, 0, 1)
-            rotation3 = (th3, 0, 1, 0)
-        elif order =='323':
-            rotation1 = (th1, 0, 0, 1)
-            rotation2 = (th2, 0, 1, 0)
-            rotation3 = (th3, 0, 0, 1)
-        elif order =='313':
-            rotation1 = (th1, 0, 0, 1)
-            rotation2 = (th2, 1, 0, 0)
-            rotation3 = (th3, 0, 0, 1)
-        elif order =='123':
-            rotation1 = (th1, 1, 0, 0)
-            rotation2 = (th2, 0, 1, 0)
-            rotation3 = (th3, 0, 0, 1)
-        elif order =='132':
-            rotation1 = (th1, 1, 0, 0)
-            rotation2 = (th2, 0, 0, 1)
-            rotation3 = (th3, 0, 1, 0)
-        elif order =='213':
-            rotation1 = (th1, 0, 1, 0)
-            rotation2 = (th2, 1, 0, 0)
-            rotation3 = (th3, 0, 0, 1)
-        elif order =='231':
-            rotation1 = (th1, 0, 1, 0)
-            rotation2 = (th2, 0, 0, 1)
-            rotation3 = (th3, 1, 0, 0)
-        elif order =='321':
-            rotation1 = (th1, 0, 0, 1)
-            rotation2 = (th2, 0, 1, 0)
-            rotation3 = (th3, 1, 0, 0)
-        elif order =='312':
-            rotation1 = (th1, 0, 0, 1)
-            rotation2 = (th2, 1, 0, 0)
-            rotation3 = (th3, 0, 1, 0)
-        euler_transform = vtk.vtkTransform()
-        euler_transform.RotateWXYZ(*rotation1)
-        euler_transform.RotateWXYZ(*rotation2)
-        euler_transform.RotateWXYZ(*rotation3)
+        if self.needs_updates or self.first_update:
+            self.first_update = False
+            order, th1, th2, th3 = self.coords()
+            order = str(int(order))
+            if order == '131':
+                rotation1 = (th1, 1, 0, 0)
+                rotation2 = (th2, 0, 0, 1)
+                rotation3 = (th3, 1, 0, 0)
+            elif order =='121':
+                rotation1 = (th1, 1, 0, 0)
+                rotation2 = (th2, 0, 1, 0)
+                rotation3 = (th3, 1, 0, 0)
+            elif order =='212':
+                rotation1 = (th1, 0, 1, 0)
+                rotation2 = (th2, 1, 0, 0)
+                rotation3 = (th3, 0, 1, 0)
+            elif order =='232':
+                rotation1 = (th1, 0, 1, 0)
+                rotation2 = (th2, 0, 0, 1)
+                rotation3 = (th3, 0, 1, 0)
+            elif order =='323':
+                rotation1 = (th1, 0, 0, 1)
+                rotation2 = (th2, 0, 1, 0)
+                rotation3 = (th3, 0, 0, 1)
+            elif order =='313':
+                rotation1 = (th1, 0, 0, 1)
+                rotation2 = (th2, 1, 0, 0)
+                rotation3 = (th3, 0, 0, 1)
+            elif order =='123':
+                rotation1 = (th1, 1, 0, 0)
+                rotation2 = (th2, 0, 1, 0)
+                rotation3 = (th3, 0, 0, 1)
+            elif order =='132':
+                rotation1 = (th1, 1, 0, 0)
+                rotation2 = (th2, 0, 0, 1)
+                rotation3 = (th3, 0, 1, 0)
+            elif order =='213':
+                rotation1 = (th1, 0, 1, 0)
+                rotation2 = (th2, 1, 0, 0)
+                rotation3 = (th3, 0, 0, 1)
+            elif order =='231':
+                rotation1 = (th1, 0, 1, 0)
+                rotation2 = (th2, 0, 0, 1)
+                rotation3 = (th3, 1, 0, 0)
+            elif order =='321':
+                rotation1 = (th1, 0, 0, 1)
+                rotation2 = (th2, 0, 1, 0)
+                rotation3 = (th3, 1, 0, 0)
+            elif order =='312':
+                rotation1 = (th1, 0, 0, 1)
+                rotation2 = (th2, 1, 0, 0)
+                rotation3 = (th3, 0, 1, 0)
+            euler_transform = vtk.vtkTransform()
+            euler_transform.RotateWXYZ(*rotation1)
+            euler_transform.RotateWXYZ(*rotation2)
+            euler_transform.RotateWXYZ(*rotation3)
+
+    def transform(self):
         self.SetUserMatrix(euler_transform.GetMatrix())
 
 
 # shows an object if const=var and hides it otherwise, behavior can be changed
 # using the optional arguments for scalefactors when true or false
-class HalShow(Collection):
-    def __init__(self, parts, comp, const, var, scaleby_true=1, scaleby_false=0):
-        super().__init__(parts)
-        self.comp = comp
-        if isinstance(const, list):
-             self.const = const
-        else:
-             self.const = [const]
-        self.var = var
-        self.current_scaleby_true = scaleby_true
-        self.current_scaleby_false = scaleby_false
+class Scale(Collection):
+    def get_expected_args(self):
+        return ('[parts]','(comp)','const','var','scalefactor_if_true','scalefactor_if_false')
 
     def update(self):
-        s_t = self.current_scaleby_true
-        s_f = self.current_scaleby_false
-        for v in ['var']:
-            # create variable from list and update from class variables of the same name
-            globals()[v] = update_passed_args(self, v)
-        if var in self.const:
-            self.SetScale(s_t,s_t,s_t)
-        else:
-            self.SetScale(s_f,s_f,s_f)
+        if self.needs_updates or self.first_update:
+            self.first_update = False
+            const, var, s_t, s_f = self.coords()
+            if not isinstance(const, list):
+                const = [const]
+            if var in const:
+                self.SetScale(s_t,s_t,s_t)
+            else:
+                self.SetScale(s_f,s_f,s_f)
 
 
 # Create a text overlay (HUD)
-# color can be either name string (eg "red","magenta") or normalized RGB as tuple (eg (0.7,0.7,0.1))
+# color can be either name string (eg 'red','magenta') or normalized RGB as tuple (eg (0.7,0.7,0.1))
 class Hud(vtk.vtkActor2D):
-    def __init__(self, comp=None, var=True, const=True, color="white", opacity=1, font_size=20, line_spacing=1):
+    def __init__(self, comp=None, var=True, const=True, color='white', opacity=1, font_size=20, line_spacing=1):
         self.comp = comp
         self.var = var
         self.const = const
@@ -866,7 +822,7 @@ class Hud(vtk.vtkActor2D):
         tprop = self.textMapper.GetTextProperty()
         tprop.SetLineSpacing(line_spacing)
         tprop.SetFontSize(font_size)
-        tprop.SetFontFamilyAsString("Courier")
+        tprop.SetFontFamilyAsString('Courier')
         tprop.SetJustificationToLeft()
         tprop.SetVerticalJustificationToTop()
         colors = vtk.vtkNamedColors()
@@ -951,9 +907,9 @@ class Hud(vtk.vtkActor2D):
                     else: # pin
                         var = hal.get_value(pin) if isinstance(comp,type(hal)) else comp[pin]
                         strs += [text.format(var)]
-        combined_string = ""
+        combined_string = ''
         for string in strs:
-            combined_string += (string + "\n")
+            combined_string += (string + '\n')
         if self.extra_text_enable and self.extra_text and not hide_hud:
             combined_string += self.extra_text
         self.textMapper.SetInput(combined_string)
@@ -965,31 +921,31 @@ class Hud(vtk.vtkActor2D):
 
 def main(comp,
          model, tooltip, work, huds,
-         window_title="Vtk-Vismach", window_width=600, window_height=300,
+         window_title='Vtk-Vismach', window_width=600, window_height=300,
          camera_azimuth=-50, camera_elevation=30,
          background_rgb = (0.2, 0.3, 0.4)):
 
     # create a separate hal component and create a pin to clear the backplot
-    vcomp = hal.component("vismach")
-    vcomp.newpin("plotclear",hal.HAL_BIT,hal.HAL_IN)
-    vcomp.newpin("work_pos_x",hal.HAL_FLOAT,hal.HAL_OUT)
-    vcomp.newpin("work_pos_y",hal.HAL_FLOAT,hal.HAL_OUT)
-    vcomp.newpin("work_pos_z",hal.HAL_FLOAT,hal.HAL_OUT)
-    vcomp.newpin("tool_pos_x",hal.HAL_FLOAT,hal.HAL_OUT)
-    vcomp.newpin("tool_pos_y",hal.HAL_FLOAT,hal.HAL_OUT)
-    vcomp.newpin("tool_pos_z",hal.HAL_FLOAT,hal.HAL_OUT)
+    vcomp = hal.component('vismach')
+    vcomp.newpin('plotclear',hal.HAL_BIT,hal.HAL_IN)
+    vcomp.newpin('work_pos_x',hal.HAL_FLOAT,hal.HAL_OUT)
+    vcomp.newpin('work_pos_y',hal.HAL_FLOAT,hal.HAL_OUT)
+    vcomp.newpin('work_pos_z',hal.HAL_FLOAT,hal.HAL_OUT)
+    vcomp.newpin('tool_pos_x',hal.HAL_FLOAT,hal.HAL_OUT)
+    vcomp.newpin('tool_pos_y',hal.HAL_FLOAT,hal.HAL_OUT)
+    vcomp.newpin('tool_pos_z',hal.HAL_FLOAT,hal.HAL_OUT)
     vcomp.ready()
     # create the backplot to be added to the renderer
-    backplot = Plotter(vcomp, work, tooltip, "plotclear")
+    backplot = Plotter(vcomp, work, tooltip, 'plotclear')
     # Event loop to periodically update the model
     def update():
         def get_actors_to_update(objects):
             for item in objects.GetParts():
-                if hasattr(item, "update"):
+                if hasattr(item, 'update'):
                     item.update()
-                if hasattr(item, "transform"):
+                if hasattr(item, 'transform'):
                     item.transform()
-                if hasattr(item, "capture"):
+                if hasattr(item, 'capture'):
                     item.capture()
                 if isinstance(item, vtk.vtkAssembly):
                     get_actors_to_update(item)
@@ -997,14 +953,14 @@ def main(comp,
         backplot.update()
 
         t2w = backplot.tool2work.GetMatrix()
-        vcomp["work_pos_x"] = work.current_matrix.GetElement(0,3)
-        vcomp["work_pos_y"] = work.current_matrix.GetElement(1,3)
-        vcomp["work_pos_z"] = work.current_matrix.GetElement(2,3)
-        r1=("{:8.3f} {:8.3f} {:8.3f} {:8.3f}".format(t2w.GetElement(0,0), t2w.GetElement(0,1), t2w.GetElement(0,2), t2w.GetElement(0,3)))
-        r2=("{:8.3f} {:8.3f} {:8.3f} {:8.3f}".format(t2w.GetElement(1,0), t2w.GetElement(1,1), t2w.GetElement(1,2), t2w.GetElement(1,3)))
-        r3=("{:8.3f} {:8.3f} {:8.3f} {:8.3f}".format(t2w.GetElement(2,0), t2w.GetElement(2,1), t2w.GetElement(2,2), t2w.GetElement(2,3)))
+        vcomp['work_pos_x'] = work.current_matrix.GetElement(0,3)
+        vcomp['work_pos_y'] = work.current_matrix.GetElement(1,3)
+        vcomp['work_pos_z'] = work.current_matrix.GetElement(2,3)
+        r1=('{:8.3f} {:8.3f} {:8.3f} {:8.3f}'.format(t2w.GetElement(0,0), t2w.GetElement(0,1), t2w.GetElement(0,2), t2w.GetElement(0,3)))
+        r2=('{:8.3f} {:8.3f} {:8.3f} {:8.3f}'.format(t2w.GetElement(1,0), t2w.GetElement(1,1), t2w.GetElement(1,2), t2w.GetElement(1,3)))
+        r3=('{:8.3f} {:8.3f} {:8.3f} {:8.3f}'.format(t2w.GetElement(2,0), t2w.GetElement(2,1), t2w.GetElement(2,2), t2w.GetElement(2,3)))
         for hud in huds:
-            hud.extra_text = "\ntool2work Matrix:"+"\n"+r1+"\n"+r2+"\n"+r3
+            hud.extra_text = '\ntool2work Matrix:'+'\n'+r1+'\n'+r2+'\n'+r3
             hud.update()
         vtkWidget.GetRenderWindow().Render()
 
@@ -1033,9 +989,9 @@ def main(comp,
     def trihedron():
         axes = vtk.vtkAxesActor()
         axes.SetShaftTypeToCylinder()
-        axes.SetXAxisLabelText("X")
-        axes.SetYAxisLabelText("Y")
-        axes.SetZAxisLabelText("Z")
+        axes.SetXAxisLabelText('X')
+        axes.SetYAxisLabelText('Y')
+        axes.SetZAxisLabelText('Z')
         axes.SetCylinderRadius(0.5 * axes.GetCylinderRadius())
         return axes
     orientation_marker = vtk.vtkOrientationMarkerWidget()
