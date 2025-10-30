@@ -41,7 +41,8 @@ Object constructors:
     Cylinder((comp),x_start, y_start, z_start, x_end, y_end, z_end, radius)
     Arrow((comp),x_start, y_start, z_start, x_end, y_end, z_end, radius)
     Axes((comp), scale)
-    GridFromNormalAndDirection((comp),x_origin, y_origin, z_origin, xx, xy, xz, zx, zy, zz, scale)
+    GridFromNormalAndDirection((comp),x_origin, y_origin, z_origin, xx, xy, xz, zx, zy, zz, quadrant_size, line_spacing)
+    PlaneFromNormalAndDirection((comp),x_origin, y_origin, z_origin, xx, xy, xz, zx, zy, zz, quadrant_size)
     CoordsFromNormalAndDirection((comp),x_origin, y_origin, z_origin, xx, xy, xz, zx, zy, zz, scale)
     ReadPolyData((comp), filename, path)
     Note:

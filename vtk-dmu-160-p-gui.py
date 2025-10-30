@@ -191,25 +191,35 @@ work = Capture()
 # Create an indicator for the tool coordinates
 work_axes = Axes(100)
 # Create an indicator for the defined Tilted Work Plane (TWP)
-# We can reuse the same arguments here
-workplane_args = (c,
+work_plane_defined=  GridFromNormalAndDirection(c,
+                'twp_ox', 'twp_oy', 'twp_oz',
+                'twp_xx', 'twp_xy', 'twp_xz',
+                'twp_zx', 'twp_zy', 'twp_zz',
+                300, 10
+                )
+# for twp-defined = true, we show the plane in gray
+work_plane_defined = Color([work_plane_defined],0.7,0.7,0.7,0.3)
+work_plane_defined = Scale([work_plane_defined],c,1,'twp_defined',1,0)
+# Create an indicator for the active Tilted Work Plane (TWP), same as active but with different color
+work_plane_active =  PlaneFromNormalAndDirection(c,
                 'twp_ox', 'twp_oy', 'twp_oz',
                 'twp_xx', 'twp_xy', 'twp_xz',
                 'twp_zx', 'twp_zy', 'twp_zz',
                 300
                 )
-work_plane_defined=  GridFromNormalAndDirection(*workplane_args)
-# for twp-defined = true, we show the plane in gray
-work_plane_defined = Color([work_plane_defined],0.7,0.7,0.7,0.3)
-work_plane_defined = Scale([work_plane_defined],c,0,'twp_active',1,0)
-# Create an indicator for the active Tilted Work Plane (TWP), same as active but with different color
-work_plane_active =  GridFromNormalAndDirection(*workplane_args)
 # for twp-active = true, we show the plane in pink
 work_plane_active = Color([work_plane_active],1,0,1,0.3)
 work_plane_active = Scale([work_plane_active],c,1,'twp_active',1,0)
 # Create a coordinate system for the twp-plane
-work_plane_coords =  CoordsFromNormalAndDirection(*workplane_args)
-work_plane = Collection([work_plane_defined, work_plane_active, work_plane_coords])
+work_plane_coords =  CoordsFromNormalAndDirection(c,
+                'twp_ox', 'twp_oy', 'twp_oz',
+                'twp_xx', 'twp_xy', 'twp_xz',
+                'twp_zx', 'twp_zy', 'twp_zz',
+                300
+                )
+work_plane = Collection([work_plane_defined,
+                         work_plane_active,
+                         work_plane_coords])
 # make the work_plane hidable
 work_plane = Scale([work_plane],c,1,'twp_defined',1,0)
 # Create geometry for the work piece

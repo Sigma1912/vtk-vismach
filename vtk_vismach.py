@@ -492,14 +492,16 @@ class Collection(ArgsBase,vtk.vtkAssembly):
 
 
 # draw a grid defined by it's normal vector(zx,zy,zz) and x-direction vector(xx, xy, xz)
-# optional s to define the half-width from the origin (ox,oy,oz)
+# quad_size to define the half-width from the origin (ox,oy,oz)
+# As for why we are not using vtkRectilinearGrid() with wireframe for this see:
+# https://gitlab.kitware.com/vtk/vtk/-/issues/18453
 class GridFromNormalAndDirection(ArgsBase,vtk.vtkAssembly):
     def get_expected_args(self):
-        return ('(comp)','ox','oy','oz','xx','xy','xz','zx','zy','zz','s')
+        return ('(comp)','ox','oy','oz','xx','xy','xz','zx','zy','zz','quad_size','spacing')
 
     def create (self):
         self.SetUserTransform(vtk.vtkTransform())
-        ox, oy, oz, xx, xy, xz, zx, zy, zz, self.s = self.coords()
+        ox, oy, oz, xx, xy, xz, zx, zy, zz, self.qs, self.sp = self.coords()
         self.r = 1
         self.grid()
 
@@ -507,14 +509,17 @@ class GridFromNormalAndDirection(ArgsBase,vtk.vtkAssembly):
         return [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]]
 
     def grid(self):
-        s = self.s
-        for i in range (-s,s+10,10):
+        qs = self.qs
+        sp = self.sp
+        line_values = range(-qs,qs+sp,sp)
+        dim = len(line_values)
+        for i in line_values:
             # create line in X direction
             line = vtk.vtkActor()
             line.SetUserTransform(vtk.vtkTransform())
             lineSource = vtk.vtkLineSource()
-            lineSource.SetPoint1(-s, i, 0)
-            lineSource.SetPoint2( s, i, 0)
+            lineSource.SetPoint1(-qs, i, 0)
+            lineSource.SetPoint2( qs, i, 0)
             # Visualize line in X direction
             colors = vtk.vtkNamedColors()
             mapper1 = vtk.vtkPolyDataMapper()
@@ -526,8 +531,8 @@ class GridFromNormalAndDirection(ArgsBase,vtk.vtkAssembly):
             # create line in Y direction
             line = vtk.vtkActor()
             lineSource = vtk.vtkLineSource()
-            lineSource.SetPoint1( i,-s, 0)
-            lineSource.SetPoint2( i, s, 0)
+            lineSource.SetPoint1( i,-qs, 0)
+            lineSource.SetPoint2( i, qs, 0)
             # Visualize line in Y direction
             colors = vtk.vtkNamedColors()
             mapper2 = vtk.vtkPolyDataMapper()
@@ -540,7 +545,7 @@ class GridFromNormalAndDirection(ArgsBase,vtk.vtkAssembly):
     def update(self):
         if self.needs_updates or self.first_update:
             self.first_update = False
-            ox, oy, oz, xx, xy, xz, zx, zy, zz, self.s = self.coords()
+            ox, oy, oz, xx, xy, xz, zx, zy, zz, self.qs, self.sp = self.coords()
             vo = [ox, oy, oz]
             vx = [xx, xy, xz]
             vz = [zx, zy, zz]
@@ -550,6 +555,60 @@ class GridFromNormalAndDirection(ArgsBase,vtk.vtkAssembly):
                     [ xy, yy, zy, oy],
                     [ xz, yz, zz, oz],
                     [  0,  0,  0,       1]]
+            transform_matrix = vtk.vtkMatrix4x4()
+            for column in range (0,4):
+                for row in range (0,4):
+                    transform_matrix.SetElement(column, row, matrix[column][row])
+            self.SetUserMatrix(transform_matrix)
+
+
+# create a plane defined by it's normal vector(zx,zy,zz) and x-direction vector(xx, xy, xz)
+# quad_size to define the half-width from the origin (ox,oy,oz)
+# This could also be used to draw a grid using .GetProperty().SetRepresentationToWireframe()
+# however there is a bug in vtk that shows black artefacts on some hardware:
+# https://gitlab.kitware.com/vtk/vtk/-/issues/18453
+class PlaneFromNormalAndDirection(ArgsBase,vtk.vtkActor):
+    def get_expected_args(self):
+        return ('(comp)','ox','oy','oz','xx','xy','xz','zx','zy','zz','quad_size')
+
+    def create (self):
+        self.grid = vtk.vtkRectilinearGrid()
+        self.xArray = vtk.vtkDoubleArray()
+        self.yArray = vtk.vtkDoubleArray()
+        zArray = vtk.vtkDoubleArray()
+        zArray.InsertNextValue(0.0)
+        self.grid.SetZCoordinates(zArray)
+        mapper = vtk.vtkDataSetMapper()
+        mapper.SetInputData(self.grid)
+        self.SetUserTransform(vtk.vtkTransform())
+        self.SetMapper(mapper)
+
+    def cross(self, a, b):
+        return [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]]
+
+    def update(self):
+        if self.needs_updates or self.first_update:
+            self.first_update = False
+            ox, oy, oz, xx, xy, xz, zx, zy, zz, qs = self.coords()
+            sp = qs
+            line_values = range(-qs,qs+sp,sp)
+            dim = len(line_values)
+            self.grid.SetDimensions(dim, dim, 1)
+            for line in line_values:
+                self.xArray.InsertNextValue(line)
+                self.yArray.InsertNextValue(line)
+            self.grid.SetXCoordinates(self.xArray)
+            self.grid.SetYCoordinates(self.yArray)
+            # create transformation
+            vo = [ox, oy, oz]
+            vx = [xx, xy, xz]
+            vz = [zx, zy, zz]
+            # calculate the missing y vector
+            vy = [yx, yy, yz] = self.cross(vz,vx)
+            matrix = [[ xx, yx, zx, ox],
+                      [ xy, yy, zy, oy],
+                      [ xz, yz, zz, oz],
+                      [  0,  0,  0,  1]]
             transform_matrix = vtk.vtkMatrix4x4()
             for column in range (0,4):
                 for row in range (0,4):
