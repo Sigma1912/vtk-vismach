@@ -1,14 +1,12 @@
 While the general syntax structure from the current (opengl) version of vismach has been used as much as possible some changes were necessary:
 
-- The same constructors can be used for static as well as dynamic arguments.
-
+Same constructors used for static and as dynamic arguments.
     Examples using the same constructor for a static rotation (ie using constants) and a dynamic rotation (ie using halpins):
         Rotate([head],90,1,0,0)
         Rotate([rotary_table_c],hal,'joint.4.pos-fb',0,0,-1)
 
 
-- Local and global halpins can be used:
-
+Using Local and global halpins:
     'Local' pins are created inside the vismach model file,
         example: 'c.newpin(("mypin", hal.HAL_FLOAT, hal.HAL_IN)
     They are accessed by passing the variable the halcomponent was assigned to at the beginning of the modelfile.
@@ -33,7 +31,6 @@ While the general syntax structure from the current (opengl) version of vismach 
 
 
 Object constructors:
-
     Box((comp),x1, y1, z1, x2, y2, z2)
     BoxCentered(((comp),x_width, y_width, z_width)
     Sphere((comp),x_center, y_center, z_center, radius)
@@ -56,12 +53,40 @@ Object constructors:
 
 
 Object manipulator constructors:
-
     Collection([parts])
     Translate([parts], (comp), x, y, z)
     Rotate([parts], (comp), th, x, y, z)
+    EulerRotate([parts], (comp), order, th1, th2, th3)
     Scale([parts], (comp), const, var, scalefactor_if_true, scalefactor_if_false)
     Color([parts], (comp), vtk_color, opacity)
     Color([parts], (comp), red, green, blue, opacity) # ie normalized R,G,B,A
-    EulerRotate([parts], (comp), order, th1, th2, th3)
+    Note:
+        Color() applies changes to the leaf nodes of the model tree. Hence a color change to a part
+        created by a translation from another part will change the color of all instances of that part.
+        If parts with identical geometry but different colors multiple instances of the geometry have to 
+        be created.
+
+Textoverlay (HUD) constructor:
+    Multiple textoverlays can be used.
+    Example creating two textoverlays, one static and one dynamic:
+        myhud1 = Hud(color='mint') # This will always be displayed
+        myhud2 = Hud(c,'kinstype_select',2,'tomato', 0.4) # This is displayed when 'kinstype_select' is 2
+
+
+Capturing tooltip and work_
+    To record and display a backplot for the toolpath we need to embed two invisible objects into the model tree
+    'tooltip = Capture()' attached to the tooltip position will track the transformation matrix of the tool
+    'work = Capture()' does the same for the work piece.
+
+
+
+Arguments calling main function for model construction:
+    Example:
+            main(c,         # name of hal.component instance used in the model
+                 model,     # collection of all parts in the model tree, ie 'model = Collection([.....])'
+                 tooltip,   # the Capture object attached to the tooltip, ie 'tooltip = Capture()'
+                 work,      # the Capture object attached to the work, ie 'work = Capture()'
+                 huds=[myhud1,myhud2],                      # optional text overlays
+                 window_width=1400, window_height=1000,     # optional window size
+                 window_title = 'Vtk_Vismach Tutorial')     # optional window_title
 
