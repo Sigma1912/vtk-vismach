@@ -846,7 +846,7 @@ class Capture(vtk.vtkActor):
         self.tracked_parts = [self]
 
     def update(self):
-        self.current_matrix = self.GetMatrix()            # store the total transformation from this cycle
+        self.current_matrix = self.GetMatrix()    # store the total transformation from this cycle
         self.SetUserTransform(vtk.vtkTransform()) # reset tranform for next update cycle
 
 

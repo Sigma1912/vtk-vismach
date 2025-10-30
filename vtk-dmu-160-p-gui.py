@@ -252,7 +252,7 @@ table = Translate([table], 0, -machine_zero_y, 0)
 #/work-side
 
 # Create machine base
-base = Color([EGO_BC],c,0.3,0.3,0.3,1)
+base = Color([EGO_BC],0.3,0.3,0.3,1)
 
 #arrow = ArrowOriented(hal, machine_zero_x, 0,-machine_zero_z,0,('vismach.work_pos_y',1),0,50)
 arrow = ArrowOriented(c, machine_zero_x, 0,-machine_zero_z,0,('work_pos_y',1),0,50)
