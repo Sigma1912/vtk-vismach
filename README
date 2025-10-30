@@ -1,29 +1,52 @@
-Notes:
 
-- Syntax from the current (opengl) version of vismach has been used as much as possible but some changes are necessary
-- vtk-vismach supports dynamic loading of 3D geometry (eg loading specific files depending on the number of the loaded tool)
+- The general syntax structure from the current (opengl) version of vismach has been used as much as possible but some changes were necessary.
+
+- Local and global halpins can be used:
+    'Local' pins are created inside the vismach model file, eg 'c.newpin(("mypin", hal.HAL_FLOAT, hal.HAL_IN). They are accessed by
+    passing the variable the halcomponent was assigned to at the beginning of the modelfile. eg 'c = hal.component('vtk-dmu-160-p-gui')'
+    Example: 
+            Translate([table],c,"mypin",0,0)
+
+    'Global' pins are created by components outside of the vismach model file, eg "joint.0.pos-fb". These are accessed by passing
+    'hal'.
+    Example:
+            Translate([table],hal,"joint.0.pos-fb",0,"joint.2.pos-fb")
+
+    Notes:
+        - Only one type of halpin (ie either all global or all local) can be used in the same constructor.
+
+        - Each halpin can be passed with an optional scaling factor as a tuple:
+          Example creating toolcylinder:
+                  CylinderZ(hal,"motion.tooloffset.z", ('halui.tool.diameter', 0.5))
 
 
-Box((comp),x1, y1, z1, x2, y2, z2)
-BoxCentered(((comp),x_width, y_width, z_width)
-Sphere((comp),x_center, y_center, z_center, radius)
-CylinderX((comp),length, radius)
-CylinderY((comp),length, radius)
-CylinderZ((comp),length, radius)
-Line((comp),x_start, y_start, z_start, x_end, y_end, z_end, radius)
-Cylinder((comp),x_start, y_start, z_start, x_end, y_end, z_end, radius)
-Arrow((comp),x_start, y_start, z_start, x_end, y_end, z_end, radius)
+Object constructors:
+    Box((comp),x1, y1, z1, x2, y2, z2)
+    BoxCentered(((comp),x_width, y_width, z_width)
+    Sphere((comp),x_center, y_center, z_center, radius)
+    CylinderX((comp),length, radius)
+    CylinderY((comp),length, radius)
+    CylinderZ((comp),length, radius)
+    Line((comp),x_start, y_start, z_start, x_end, y_end, z_end, radius)
+    Cylinder((comp),x_start, y_start, z_start, x_end, y_end, z_end, radius)
+    Arrow((comp),x_start, y_start, z_start, x_end, y_end, z_end, radius)
+    Axes((comp), scale)
+    GridFromNormalAndDirection((comp),x_origin, y_origin, z_origin, xx, xy, xz, zx, zy, zz, scale)
+    CoordsFromNormalAndDirection((comp),x_origin, y_origin, z_origin, xx, xy, xz, zx, zy, zz, scale)
+    ReadPolyData((comp), filename, path)
+    Note:
+        ReadPolyData() will optionally accept a numeric 'filename' from a halpin. The file location is constructed as follows:
+                path + <halpin_value> + '.stl'
+        Example loading 3d tool data dynamically on toolchange:
+                ReadPolyData(hal,"halui.tool.number", path_tool_stl)
 
 
-ReadPolyData((comp), filename, path)
-Axes((comp), scale)
-GridFromNormalAndDirection((comp),x_origin, y_origin, z_origin, xx, xy, xz, zx, zy, zz, scale)
-CoordsFromNormalAndDirection((comp),x_origin, y_origin, z_origin, xx, xy, xz, zx, zy, zz, scale)
+Object manipulator constructors:
+    Collection([parts])
+    Translate([parts], (comp), x, y, z)
+    Rotate([parts], (comp), th, x, y, z)
+    Scale([parts], (comp), const, var, scalefactor_if_true, scalefactor_if_false)
+    Color([parts], (comp), vtk_color, opacity)
+    Color([parts], (comp), red, green, blue, opacity) # ie normalized R,G,B,A
+    EulerRotate([parts], (comp), order, th1, th2, th3)
 
-Collection([parts])
-Translate([parts], (comp), x, y, z)
-Rotate([parts], (comp), th, x, y, z)
-Scale([parts], (comp), const, var, scalefactor_if_true, scalefactor_if_false)
-Color([parts], (comp), vtk_color, opacity)
-Color([parts], (comp), red, green, blue, opacity) # ie normalized R,G,B,A
-EulerRotate([parts], (comp), order, th1, th2, th3)
