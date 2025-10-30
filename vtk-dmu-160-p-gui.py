@@ -84,6 +84,13 @@ c.newpin('rot_order', hal.HAL_FLOAT, hal.HAL_IN)
 c.newpin('rot_th1', hal.HAL_FLOAT, hal.HAL_IN)
 c.newpin('rot_th2', hal.HAL_FLOAT, hal.HAL_IN)
 c.newpin('rot_th3', hal.HAL_FLOAT, hal.HAL_IN)
+# these pins are written to from main()
+c.newpin('work_pos_x',hal.HAL_FLOAT,hal.HAL_OUT)
+c.newpin('work_pos_y',hal.HAL_FLOAT,hal.HAL_OUT)
+c.newpin('work_pos_z',hal.HAL_FLOAT,hal.HAL_OUT)
+c.newpin('tool_pos_x',hal.HAL_FLOAT,hal.HAL_OUT)
+c.newpin('tool_pos_y',hal.HAL_FLOAT,hal.HAL_OUT)
+c.newpin('tool_pos_z',hal.HAL_FLOAT,hal.HAL_OUT)
 c.ready()
 
 
@@ -237,7 +244,8 @@ table = Translate([table], 0, -machine_zero_y, 0)
 # Create machine base
 base = Color([EGO_BC],c,0.3,0.3,0.3,1)
 
-arrow = ArrowOriented(hal, machine_zero_x, 0,-machine_zero_z,0,('vismach.work_pos_y',1),0,50)
+#arrow = ArrowOriented(hal, machine_zero_x, 0,-machine_zero_z,0,('vismach.work_pos_y',1),0,50)
+arrow = ArrowOriented(c, machine_zero_x, 0,-machine_zero_z,0,('work_pos_y',1),0,50)
 #arrow = Translate_orig([arrow], machine_zero_x, 0, machine_zero_z)
 
 model = Collection([
@@ -250,7 +258,8 @@ model = Collection([
         Box(hal,'joint.1.pos-fb',0,0,100,100,-100),
         Sphere(0,0,0,5),
         Line(hal,('joint.1.pos-fb',-1),100,100,-1000,-1000,1000,2),
-        ArrowOriented(hal,0,0,0,'vismach.work_pos_x','vismach.work_pos_y','vismach.work_pos_z',50),
+        #rrowOriented(hal,0,0,0,'vismach.work_pos_x','vismach.work_pos_y','vismach.work_pos_z',50),
+        ArrowOriented(c,0,0,0,'work_pos_x','work_pos_y','work_pos_z',50),
         CylinderOriented(hal,'joint.1.pos-fb',100,100,-1000,-1000,1000,50),
         ArrowOriented(c,0,0,0,'twp_ox_world','twp_oy_world','twp_oz_world',20),
         ])

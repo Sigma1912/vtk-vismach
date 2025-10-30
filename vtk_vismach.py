@@ -36,14 +36,29 @@ def parse_arguments(self, has_parts, args):
     self.first_update = True
 
 
-class CoordsBaseActor(vtk.vtkActor):
+
+class CoordsBase(object):
     def __init__(self, *args):
-        has_parts = False # used to adjust the number of expected arguments
+        if isinstance(args[0], list): # an object manipulator is being created (ie the first argument is [parts])
+            has_parts = True # used to adjust number of expected arguments
+            parts = args[0]
+            args = args[1:]
+            self.SetUserTransform(vtk.vtkTransform())
+            # Collect parts
+            for part in parts:
+                self.AddPart(part)
+                if hasattr(part, 'tracked_parts'):
+                    if not hasattr(self, 'tracked_parts'):
+                        self.tracked_parts = []
+                    self.tracked_parts += part.tracked_parts
+        else: # an object creator is being created (ie the first argument is NOT [parts])
+            has_parts = False # used to adjust the number of expected arguments
+
         parse_arguments(self, has_parts, args)
-        self.create()
-        # initial update for actors that do not need updates later.
+        if hasattr(self, "create"):
+            self.create()
         # We cannot wait for the 1. update cycle because camera needs something to set the view on startup
-        if not self.needs_updates:
+        if hasattr(self, "update"):
             self.update()
 
     def coords(self):
@@ -71,34 +86,22 @@ class CoordsBaseActor(vtk.vtkActor):
                 return v
             return s*v
 
-
-class CoordsBaseAssembly(vtk.vtkAssembly):
-    def __init__(self, *args):
-        has_parts = False # used to adjust the number of expected arguments
-        parse_arguments(self, has_parts, args)
-        self.create()
-
-    def coords(self):
-        if len(self._coords) == 1: # 'self._coords' is set in 'parse_arguments() it's args w/o comp'
-            return list(map(self._coord, self._coords))[0]
-        return list(map(self._coord, self._coords))
-
-    def _coord(self, v):
-        s = 1 # default scale factor
-        if isinstance(v,tuple):
-            # tuple syntax has been used, ie (<halpin_name>, scalefactor)
-            tup = v
-            v = tup[0]
-            s = tup[1]
-        if isinstance(v, str) and isinstance(self.comp, hal.component):
-            return s*self.comp[v]
-        elif isinstance(v, str) and isinstance(self.comp,type(hal)):
-            return s*hal.get_value(v)
-        else:
-            return s*v
+    def capture(self):
+        if hasattr(self, 'tracked_parts'):
+            if hasattr(self, 'transformation'):
+                for tracked_part in self.tracked_parts:
+                    tracked_part.GetUserTransform().Concatenate(self.transformation)
 
 
-class Box(CoordsBaseActor):
+class Actor(CoordsBase, vtk.vtkActor):
+    pass
+
+
+class Collection(CoordsBase,vtk.vtkAssembly):
+    pass
+
+
+class Box(Actor):
     def get_expected_args(self):
         return ('(comp)','x1', 'y1', 'z1', 'x2', 'y2', 'z2')
 
@@ -134,7 +137,7 @@ class Box(CoordsBaseActor):
 
 # specify the width in X and Y, and the height in Z
 # the box is centered on the origin
-class BoxCentered(CoordsBaseActor):
+class BoxCentered(Actor):
     def get_expected_args(self):
         return ('(comp)','xw', 'yw', 'zw')
 
@@ -156,7 +159,7 @@ class BoxCentered(CoordsBaseActor):
 
 # specify the width in X and Y, and the height in Z
 # the box is centered on the origin
-class Sphere(CoordsBaseActor):
+class Sphere(Actor):
     def get_expected_args(self):
         return ('(comp)','x', 'y', 'z', 'r')
 
@@ -176,7 +179,7 @@ class Sphere(CoordsBaseActor):
 
 
 # Create cylinder along Y axis (default direction for vtkCylinderSource)
-class CylinderY(CoordsBaseActor):
+class CylinderY(Actor):
     def get_expected_args(self):
         return ('(comp)','length', 'radius')
 
@@ -234,7 +237,7 @@ class CylinderX(CylinderY):
 
 
 # draw a line from point_1 to point_2
-class Line(CoordsBaseActor):
+class Line(Actor):
     def get_expected_args(self):
         return ('(comp)','x_start', 'y_start', 'z_start', 'x_end', 'y_end', 'z_end', 'radius')
 
@@ -254,7 +257,7 @@ class Line(CoordsBaseActor):
 
 
 # Creates a 3d cylinder from (xs,ys,zs) to (xe,ye,ze)
-class CylinderOriented(CoordsBaseActor):
+class CylinderOriented(Actor):
     def get_expected_args(self):
         return ('(comp)','x_start', 'y_start', 'z_start', 'x_end', 'y_end', 'z_end', 'radius')
 
@@ -307,7 +310,7 @@ class CylinderOriented(CoordsBaseActor):
 
 
 # Creates a 3d arrow pointing from (xs,ys,zs) to (xe,ye,ze)
-class ArrowOriented(CoordsBaseActor):
+class ArrowOriented(Actor):
     def get_expected_args(self):
         return ('(comp)','x_start', 'y_start', 'z_start', 'x_end', 'y_end', 'z_end', 'radius')
 
@@ -402,7 +405,7 @@ def make_reader(file_name):
 
 
 # Loads 3D geometry from file
-class ReadPolyData(CoordsBaseActor):
+class ReadPolyData(Actor):
     def get_expected_args(self):
         return ('(comp)','filename','path')
 
@@ -441,7 +444,7 @@ class ReadPolyData(CoordsBaseActor):
 
 
 # Create a trihedron indicating coordinate orientation
-class Axes(CoordsBaseAssembly):
+class Axes(Collection):
     def get_expected_args(self):
         return ('(comp)','scale')
 
@@ -463,7 +466,7 @@ class Axes(CoordsBaseAssembly):
 
 # draw a grid defined by it's normal vector(zx,zy,zz) and x-direction vector(xx, xy, xz)
 # optional s to define the half-width from the origin (ox,oy,oz)
-class GridFromNormalAndDirection(CoordsBaseAssembly):
+class GridFromNormalAndDirection(Collection):
     def get_expected_args(self):
         return ('(comp)','ox','oy','oz','xx','xy','xz','zx','zy','zz','s')
 
@@ -529,7 +532,7 @@ class GridFromNormalAndDirection(CoordsBaseAssembly):
 
 # draw a coordinate system defined by it's normal vector(zx,zy,zz) and x-direction vector(xx, xy, xz)
 # optional r to define the thickness of the cylinders
-class CoordsFromNormalAndDirection(CoordsBaseAssembly):
+class CoordsFromNormalAndDirection(Collection):
     def get_expected_args(self):
         return ('(comp)','ox','oy','oz','xx','xy','xz','zx','zy','zz','scale')
 
@@ -568,52 +571,6 @@ class CoordsFromNormalAndDirection(CoordsBaseAssembly):
             self.SetUserMatrix(transform_matrix)
 
 
-class Collection(vtk.vtkAssembly):
-    def __init__(self, parts, *args):
-        self.SetUserTransform(vtk.vtkTransform())
-        has_parts = True # used to adjust number of expected arguments
-        # Collect parts
-        for part in parts:
-            self.AddPart(part)
-            if hasattr(part, 'tracked_parts'):
-                if not hasattr(self, 'tracked_parts'):
-                    self.tracked_parts = []
-                self.tracked_parts += part.tracked_parts
-        parse_arguments(self, has_parts, args)
-        if hasattr(self, "create"):
-            self.create()
-        # We cannot wait for the 1. update cycle because camera needs something to set the view on startup
-        if hasattr(self, "update"):
-            self.update()
-
-    def coords(self):
-        return list(map(self._coord, self._coords))
-
-    def _coord(self, v):
-        s = 1 # default scale factor
-        if isinstance(v,tuple):
-            if len(v) > 2: # RGB color
-                return v
-            # tuple syntax has been used, ie (<halpin_name>, scalefactor)
-            tup = v
-            v = tup[0]
-            s = tup[1]
-        if isinstance(v, str) and isinstance(self.comp, hal.component):
-            return s*self.comp[v]
-        elif isinstance(v, str) and isinstance(self.comp,type(hal)):
-            return s*hal.get_value(v)
-        else:
-            if isinstance(v,str): # eg a color string from 'Color()'
-                return v
-            return s*v
-
-    def capture(self):
-        if hasattr(self, 'tracked_parts'):
-            if hasattr(self, 'transformation'):
-                for tracked_part in self.tracked_parts:
-                    tracked_part.GetUserTransform().Concatenate(self.transformation)
-
-
 class Translate(Collection):
     def get_expected_args(self):
         return ('[parts]','(comp)','x','y','z')
@@ -646,7 +603,7 @@ class Rotate(Collection):
 
 
 class Color(Collection):
-    # Color property needs to be set in each individual actor in the vtkAssembly, parts that have been created by 
+    # Color property needs to be set in each individual actor in the vtkAssembly, parts that have been created by
     # a transformation (eg Translate(), Rotate(), Scale()) will always inherit and change with the parent part.
     def get_expected_args(self):
         return [('[parts]','(comp)','color', 'opacity'),('[parts]','(comp)','red','green','blue','opacity')]
@@ -968,15 +925,8 @@ def main(comp,
          camera_azimuth=-50, camera_elevation=30,
          background_rgb = (0.2, 0.3, 0.4)):
 
-    # create a separate hal component and create a pin to clear the backplot
     vcomp = hal.component('vismach')
     vcomp.newpin('plotclear',hal.HAL_BIT,hal.HAL_IN)
-    vcomp.newpin('work_pos_x',hal.HAL_FLOAT,hal.HAL_OUT)
-    vcomp.newpin('work_pos_y',hal.HAL_FLOAT,hal.HAL_OUT)
-    vcomp.newpin('work_pos_z',hal.HAL_FLOAT,hal.HAL_OUT)
-    vcomp.newpin('tool_pos_x',hal.HAL_FLOAT,hal.HAL_OUT)
-    vcomp.newpin('tool_pos_y',hal.HAL_FLOAT,hal.HAL_OUT)
-    vcomp.newpin('tool_pos_z',hal.HAL_FLOAT,hal.HAL_OUT)
     vcomp.ready()
     # create the backplot to be added to the renderer
     backplot = Plotter(vcomp, work, tooltip, 'plotclear')
@@ -996,9 +946,9 @@ def main(comp,
         backplot.update()
 
         t2w = backplot.tool2work.GetMatrix()
-        vcomp['work_pos_x'] = work.current_matrix.GetElement(0,3)
-        vcomp['work_pos_y'] = work.current_matrix.GetElement(1,3)
-        vcomp['work_pos_z'] = work.current_matrix.GetElement(2,3)
+        comp['work_pos_x'] = work.current_matrix.GetElement(0,3)
+        comp['work_pos_y'] = work.current_matrix.GetElement(1,3)
+        comp['work_pos_z'] = work.current_matrix.GetElement(2,3)
         r1=('{:8.3f} {:8.3f} {:8.3f} {:8.3f}'.format(t2w.GetElement(0,0), t2w.GetElement(0,1), t2w.GetElement(0,2), t2w.GetElement(0,3)))
         r2=('{:8.3f} {:8.3f} {:8.3f} {:8.3f}'.format(t2w.GetElement(1,0), t2w.GetElement(1,1), t2w.GetElement(1,2), t2w.GetElement(1,3)))
         r3=('{:8.3f} {:8.3f} {:8.3f} {:8.3f}'.format(t2w.GetElement(2,0), t2w.GetElement(2,1), t2w.GetElement(2,2), t2w.GetElement(2,3)))
