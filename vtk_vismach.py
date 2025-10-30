@@ -11,33 +11,7 @@ from PyQt5 import Qt
 from PyQt5.QtCore import QTimer
 
 
-def parse_arguments(self, has_parts, args):
-    if args and (isinstance(args[0], hal.component) or isinstance(args[0],type(hal))): #halpin passed
-        self.comp = args[0]
-        args = args[1:]
-        self.needs_updates = True
-    else:  # no halpin passed
-        self.comp = None
-        self.needs_updates = False
-    # check number of arguments against expected number, need to adjust for '[parts]' and '(comp)'
-    args_count = len(args) + has_parts + 1
-    if hasattr(self, 'get_expected_args'):
-        args_expected = self.get_expected_args()
-        # if a class accepts more than one combination of arguments it will return them in a list
-        if not isinstance(args_expected,list):
-            args_expected = [args_expected]
-        # check if number of passed args match any of the possibilities returned
-        res = [args_count == len(a) for a in args_expected]
-        if not any(res):
-            # if none match we raise an error
-            raise ValueError('Expected arguments are', self.get_expected_args())
-    self._coords = args
-    # prepare so at least the first update is run as instances with static values are not updated after
-    self.first_update = True
-
-
-
-class CoordsBase(object):
+class ArgsBase(object):
     def __init__(self, *args):
         if isinstance(args[0], list): # an object manipulator is being created (ie the first argument is [parts])
             has_parts = True # used to adjust number of expected arguments
@@ -53,8 +27,30 @@ class CoordsBase(object):
                     self.tracked_parts += part.tracked_parts
         else: # an object creator is being created (ie the first argument is NOT [parts])
             has_parts = False # used to adjust the number of expected arguments
-
-        parse_arguments(self, has_parts, args)
+        # parse args
+        if args and (isinstance(args[0], hal.component) or isinstance(args[0],type(hal))): #halpin passed
+            self.comp = args[0]
+            args = args[1:]
+            self.needs_updates = True
+        else:  # no halpin passed
+            self.comp = None
+            self.needs_updates = False
+        # check number of arguments against expected number, need to adjust for '[parts]' and '(comp)'
+        args_count = len(args) + has_parts + 1
+        if hasattr(self, 'get_expected_args'):
+            args_expected = self.get_expected_args()
+            # if a class accepts more than one combination of arguments it will return them in a list
+            if not isinstance(args_expected,list):
+                args_expected = [args_expected]
+            # check if number of passed args match any of the possibilities returned
+            res = [args_count == len(a) for a in args_expected]
+            if not any(res):
+                # if none match we raise an error
+                raise ValueError('Expected arguments are', self.get_expected_args())
+        # store parsed args
+        self._coords = args
+        # prepare so at least the first update is run as instances with static values are not updated after
+        self.first_update = True
         if hasattr(self, "create"):
             self.create()
         # We cannot wait for the 1. update cycle because camera needs something to set the view on startup
@@ -93,15 +89,7 @@ class CoordsBase(object):
                     tracked_part.GetUserTransform().Concatenate(self.transformation)
 
 
-class Actor(CoordsBase, vtk.vtkActor):
-    pass
-
-
-class Collection(CoordsBase,vtk.vtkAssembly):
-    pass
-
-
-class Box(Actor):
+class Box(ArgsBase, vtk.vtkActor):
     def get_expected_args(self):
         return ('(comp)','x1', 'y1', 'z1', 'x2', 'y2', 'z2')
 
@@ -137,7 +125,7 @@ class Box(Actor):
 
 # specify the width in X and Y, and the height in Z
 # the box is centered on the origin
-class BoxCentered(Actor):
+class BoxCentered(ArgsBase, vtk.vtkActor):
     def get_expected_args(self):
         return ('(comp)','xw', 'yw', 'zw')
 
@@ -159,7 +147,7 @@ class BoxCentered(Actor):
 
 # specify the width in X and Y, and the height in Z
 # the box is centered on the origin
-class Sphere(Actor):
+class Sphere(ArgsBase, vtk.vtkActor):
     def get_expected_args(self):
         return ('(comp)','x', 'y', 'z', 'r')
 
@@ -179,7 +167,7 @@ class Sphere(Actor):
 
 
 # Create cylinder along Y axis (default direction for vtkCylinderSource)
-class CylinderY(Actor):
+class CylinderY(ArgsBase, vtk.vtkActor):
     def get_expected_args(self):
         return ('(comp)','length', 'radius')
 
@@ -237,7 +225,7 @@ class CylinderX(CylinderY):
 
 
 # draw a line from point_1 to point_2
-class Line(Actor):
+class Line(ArgsBase, vtk.vtkActor):
     def get_expected_args(self):
         return ('(comp)','x_start', 'y_start', 'z_start', 'x_end', 'y_end', 'z_end', 'radius')
 
@@ -257,7 +245,7 @@ class Line(Actor):
 
 
 # Creates a 3d cylinder from (xs,ys,zs) to (xe,ye,ze)
-class CylinderOriented(Actor):
+class CylinderOriented(ArgsBase, vtk.vtkActor):
     def get_expected_args(self):
         return ('(comp)','x_start', 'y_start', 'z_start', 'x_end', 'y_end', 'z_end', 'radius')
 
@@ -310,7 +298,7 @@ class CylinderOriented(Actor):
 
 
 # Creates a 3d arrow pointing from (xs,ys,zs) to (xe,ye,ze)
-class ArrowOriented(Actor):
+class ArrowOriented(ArgsBase, vtk.vtkActor):
     def get_expected_args(self):
         return ('(comp)','x_start', 'y_start', 'z_start', 'x_end', 'y_end', 'z_end', 'radius')
 
@@ -365,47 +353,8 @@ class ArrowOriented(Actor):
             self.SetUserMatrix(transform.GetMatrix())
 
 
-# function to crate the reader for 3d geometry files
-def make_reader(file_name):
-    path, extension = os.path.splitext(file_name)
-    extension = extension.lower()
-    if extension == '.ply':
-        reader = vtk.vtkPLYReader()
-        reader.SetFileName(file_name)
-        reader.Update()
-        poly_data = reader.GetOutput()
-    elif extension == '.vtp':
-        reader = vtk.vtkXMLPolyDataReader()
-        reader.SetFileName(file_name)
-        reader.Update()
-        poly_data = reader.GetOutput()
-    elif extension == '.obj':
-        reader = vtk.vtkOBJReader()
-        reader.SetFileName(file_name)
-        reader.Update()
-        poly_data = reader.GetOutput()
-    elif extension == '.stl':
-        reader = vtk.vtkSTLReader()
-        reader.SetFileName(file_name)
-        reader.Update()
-        poly_data = reader.GetOutput()
-    elif extension == '.vtk':
-        reader = vtk.vtkXMLPolyDataReader()
-        reader.SetFileName(file_name)
-        reader.Update()
-        poly_data = reader.GetOutput()
-    elif extension == '.g':
-        reader = vtk.vtkBYUReader()
-        reader.SetGeometryFileName(file_name)
-        reader.Update()
-        poly_data = reader.GetOutput()
-    else:
-        print('ReadPolyData Error: Unable to read file ', file_name)
-    return reader
-
-
 # Loads 3D geometry from file
-class ReadPolyData(Actor):
+class ReadPolyData(ArgsBase, vtk.vtkActor):
     def get_expected_args(self):
         return ('(comp)','filename','path')
 
@@ -435,7 +384,40 @@ class ReadPolyData(Actor):
                 mapper.SetInputConnection(sphereSource.GetOutputPort())
             else:
                 # create from stl file
-                reader = make_reader(filepath)
+                path, extension = os.path.splitext(filepath)
+                extension = extension.lower()
+                if extension == '.ply':
+                    reader = vtk.vtkPLYReader()
+                    reader.SetFileName(filepath)
+                    reader.Update()
+                    poly_data = reader.GetOutput()
+                elif extension == '.vtp':
+                    reader = vtk.vtkXMLPolyDataReader()
+                    reader.SetFileName(filepath)
+                    reader.Update()
+                    poly_data = reader.GetOutput()
+                elif extension == '.obj':
+                    reader = vtk.vtkOBJReader()
+                    reader.SetFileName(filepath)
+                    reader.Update()
+                    poly_data = reader.GetOutput()
+                elif extension == '.stl':
+                    reader = vtk.vtkSTLReader()
+                    reader.SetFileName(filepath)
+                    reader.Update()
+                    poly_data = reader.GetOutput()
+                elif extension == '.vtk':
+                    reader = vtk.vtkXMLPolyDataReader()
+                    reader.SetFileName(filepath)
+                    reader.Update()
+                    poly_data = reader.GetOutput()
+                elif extension == '.g':
+                    reader = vtk.vtkBYUReader()
+                    reader.SetGeometryFileName(filepath)
+                    reader.Update()
+                    poly_data = reader.GetOutput()
+                else:
+                    print('ReadPolyData Error: Unable to read file ', filepath)
                 mapper.SetInputConnection(reader.GetOutputPort())
             self.SetMapper(mapper)
             # Avoid visible backfaces on Linux with some video cards like intel
@@ -444,29 +426,74 @@ class ReadPolyData(Actor):
 
 
 # Create a trihedron indicating coordinate orientation
-class Axes(Collection):
+class Axes(ArgsBase,vtk.vtkAxesActor):
     def get_expected_args(self):
         return ('(comp)','scale')
 
     def create (self):
-        self.SetUserTransform(vtk.vtkTransform())
         radius_factor = 0.5
-        self.axesActor = vtk.vtkAxesActor()
-        self.axesActor.SetShaftTypeToCylinder()
-        self.axesActor.SetCylinderRadius(radius_factor*self.axesActor.GetCylinderRadius())
-        self.axesActor.SetConeRadius(radius_factor*self.axesActor.GetConeRadius())
-        self.AddPart(self.axesActor)
+        self.SetUserTransform(vtk.vtkTransform())
+        self.SetShaftTypeToCylinder()
+        self.SetCylinderRadius(radius_factor * self.GetCylinderRadius())
+        self.SetConeRadius(radius_factor * self.GetConeRadius())
 
     def update(self):
         if self.needs_updates or self.first_update:
             self.first_update = False
             scale = self.coords()
-            self.axesActor.SetScale(scale,scale,scale)
+            self.SetScale(scale,scale,scale)
+
+
+# draw a coordinate system defined by it's normal vector(zx,zy,zz) and x-direction vector(xx, xy, xz)
+# optional r to define the thickness of the cylinders
+class CoordsFromNormalAndDirection(ArgsBase,vtk.vtkAxesActor):
+    def get_expected_args(self):
+        return ('(comp)','ox','oy','oz','xx','xy','xz','zx','zy','zz','scale')
+
+    def cross(self, a, b):
+        return [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]]
+
+    def create(self):
+        ox, oy, oz, xx, xy, xz, zx, zy, zz, self.scale_factor = self.coords()
+        radius_factor = 0.5
+        self.SetUserTransform(vtk.vtkTransform())
+        self.SetShaftTypeToCylinder()
+        self.SetCylinderRadius(radius_factor * self.GetCylinderRadius())
+        self.SetConeRadius(radius_factor * self.GetConeRadius())
+        self.SetScale(self.scale_factor, self.scale_factor, self.scale_factor)
+        self.SetUserTransform(vtk.vtkTransform())
+
+    def update(self):
+        if self.needs_updates or self.first_update:
+            self.first_update = False
+            ox, oy, oz, xx, xy, xz, zx, zy, zz, s = self.coords()
+            vo = [ox, oy, oz]
+            vx = [xx, xy, xz]
+            vz = [zx, zy, zz]
+            # calculate the missing y vector
+            vy = [yx, yy, yz] = self.cross(vz,vx)
+            matrix = [[ xx, yx, zx, ox],
+                    [ xy, yy, zy, oy],
+                    [ xz, yz, zz, oz],
+                    [  0,  0,  0,  1]]
+            transform_matrix = vtk.vtkMatrix4x4()
+            for column in range (0,4):
+                for row in range (0,4):
+                    transform_matrix.SetElement(column, row, matrix[column][row])
+            self.SetUserMatrix(transform_matrix)
+
+
+
+
+
+# Collcts a list of Actors and Assemblies into a new assembly
+class Collection(ArgsBase,vtk.vtkAssembly):
+    pass
 
 
 # draw a grid defined by it's normal vector(zx,zy,zz) and x-direction vector(xx, xy, xz)
 # optional s to define the half-width from the origin (ox,oy,oz)
-class GridFromNormalAndDirection(Collection):
+class GridFromNormalAndDirection(ArgsBase,vtk.vtkAssembly):
     def get_expected_args(self):
         return ('(comp)','ox','oy','oz','xx','xy','xz','zx','zy','zz','s')
 
@@ -530,48 +557,7 @@ class GridFromNormalAndDirection(Collection):
             self.SetUserMatrix(transform_matrix)
 
 
-# draw a coordinate system defined by it's normal vector(zx,zy,zz) and x-direction vector(xx, xy, xz)
-# optional r to define the thickness of the cylinders
-class CoordsFromNormalAndDirection(Collection):
-    def get_expected_args(self):
-        return ('(comp)','ox','oy','oz','xx','xy','xz','zx','zy','zz','scale')
-
-    def cross(self, a, b):
-        return [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]]
-
-    def create(self):
-        ox, oy, oz, xx, xy, xz, zx, zy, zz, self.scale_factor = self.coords()
-        self.radius_factor = 0.5
-        # Create arrow (arrows are created along the X axis by default)
-        self.axes = vtk.vtkAxesActor()
-        self.axes.SetShaftTypeToCylinder()
-        self.axes.SetCylinderRadius(self.radius_factor*self.axes.GetCylinderRadius())
-        self.axes.SetConeRadius(self.radius_factor*self.axes.GetConeRadius())
-        self.axes.SetScale(self.scale_factor, self.scale_factor, self.scale_factor)
-        self.AddPart(self.axes)
-        self.SetUserTransform(vtk.vtkTransform())
-
-    def update(self):
-        if self.needs_updates or self.first_update:
-            self.first_update = False
-            ox, oy, oz, xx, xy, xz, zx, zy, zz, s = self.coords()
-            vo = [ox, oy, oz]
-            vx = [xx, xy, xz]
-            vz = [zx, zy, zz]
-            # calculate the missing y vector
-            vy = [yx, yy, yz] = self.cross(vz,vx)
-            matrix = [[ xx, yx, zx, ox],
-                    [ xy, yy, zy, oy],
-                    [ xz, yz, zz, oz],
-                    [  0,  0,  0,  1]]
-            transform_matrix = vtk.vtkMatrix4x4()
-            for column in range (0,4):
-                for row in range (0,4):
-                    transform_matrix.SetElement(column, row, matrix[column][row])
-            self.SetUserMatrix(transform_matrix)
-
-
-class Translate(Collection):
+class Translate(ArgsBase,vtk.vtkAssembly):
     def get_expected_args(self):
         return ('[parts]','(comp)','x','y','z')
 
@@ -586,7 +572,7 @@ class Translate(Collection):
         self.SetUserTransform(self.transformation)
 
 
-class Rotate(Collection):
+class Rotate(ArgsBase,vtk.vtkAssembly):
     def get_expected_args(self):
         return ('[parts]','(comp)','th','x','y','z')
 
@@ -602,7 +588,7 @@ class Rotate(Collection):
         self.SetUserTransform(self.transformation)
 
 
-class Color(Collection):
+class Color(ArgsBase,vtk.vtkAssembly):
     # Color property needs to be set in each individual actor in the vtkAssembly, parts that have been created by
     # a transformation (eg Translate(), Rotate(), Scale()) will always inherit and change with the parent part.
     def get_expected_args(self):
@@ -640,7 +626,7 @@ class Color(Collection):
                 part.GetProperty().SetOpacity(opacity)
 
 
-class RotateEuler(Collection):
+class RotateEuler(ArgsBase,vtk.vtkAssembly):
     def get_expected_args(self):
         return ('[parts]','(comp)','order','th1','th2','th3')
 
@@ -708,7 +694,7 @@ class RotateEuler(Collection):
 
 # shows an object if const=var and hides it otherwise, behavior can be changed
 # using the optional arguments for scalefactors when true or false
-class Scale(Collection):
+class Scale(ArgsBase,vtk.vtkAssembly):
     def get_expected_args(self):
         return ('[parts]','(comp)','const','var','scalefactor_if_true','scalefactor_if_false')
 
