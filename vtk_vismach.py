@@ -2,8 +2,8 @@
 # Author: David Mueller 2025
 # email: mueller_david@hotmail.com
 
-import hal
-import vtk  # this should be changed to only import the used modules
+import hal, signal
+import vtk
 import os
 
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
@@ -1001,7 +1001,13 @@ def main(comp,
             hud.extra_text = '\ntool2work Matrix:'+'\n'+r1+'\n'+r2+'\n'+r3
             hud.update()
         vtkWidget.GetRenderWindow().Render()
+    # close vismach if linuxcnc is closed
+    def quit(*args):
+        raise SystemExit
 
+    signal.signal(signal.SIGTERM, quit)
+    signal.signal(signal.SIGINT, quit)
+    # Create the qt app
     app = Qt.QApplication([])
     # Qt Window
     mainWindow = Qt.QMainWindow()
