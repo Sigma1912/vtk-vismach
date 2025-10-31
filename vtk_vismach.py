@@ -1011,8 +1011,7 @@ def main(comp,
     app = Qt.QApplication([])
     # Qt Window
     mainWindow = Qt.QMainWindow()
-    mainWindow.setMinimumHeight(window_height)
-    mainWindow.setMinimumWidth(window_width)
+    mainWindow.resize(window_width,window_height)
     mainWindow.setWindowTitle(window_title)
     # A renderer and render window
     renderer = vtk.vtkRenderer()
