@@ -254,9 +254,8 @@ table = Translate([table], 0, -machine_zero_y, 0)
 # Create machine base
 base = Color([EGO_BC],0.3,0.3,0.3,1)
 
-#arrow = ArrowOriented(hal, machine_zero_x, 0,-machine_zero_z,0,('vismach.work_pos_y',1),0,50)
-arrow = ArrowOriented(c, machine_zero_x, 0,-machine_zero_z,0,('work_pos_y',1),0,50)
-#arrow = Translate_orig([arrow], machine_zero_x, 0, machine_zero_z)
+arrow = ArrowOriented(c,0,0,0,'twp_ox_world','twp_oy_world','twp_oz_world',20)
+arrow = Translate([arrow], machine_zero_x, 0, machine_zero_z)
 
 model = Collection([
         machine_axes,
@@ -264,14 +263,13 @@ model = Collection([
         table,
         base,
         arrow,
-        CylinderX(hal,'joint.0.pos-fb',50),
-        Box(hal,'joint.1.pos-fb',0,0,100,100,-100),
-        Sphere(0,0,0,5),
-        Line(hal,('joint.1.pos-fb',-1),100,100,-1000,-1000,1000,2),
+        #CylinderX(hal,'joint.0.pos-fb',50),
+        #Box(hal,'joint.1.pos-fb',0,0,100,100,-100),
+        #Sphere(0,0,0,5),
+        #Line(hal,('joint.1.pos-fb',-1),100,100,-1000,-1000,1000,2),
         #rrowOriented(hal,0,0,0,'vismach.work_pos_x','vismach.work_pos_y','vismach.work_pos_z',50),
-        ArrowOriented(c,0,0,0,'work_pos_x','work_pos_y','work_pos_z',50),
-        CylinderOriented(hal,'joint.1.pos-fb',100,100,-1000,-1000,1000,50),
-        ArrowOriented(c,0,0,0,'twp_ox_world','twp_oy_world','twp_oz_world',20),
+        ArrowOriented(c,'tool_pos_x','tool_pos_y','tool_pos_z','work_pos_x','work_pos_y','work_pos_z',50),
+        #CylinderOriented(hal,'joint.1.pos-fb',100,100,-1000,-1000,1000,50)
         ])
 
 #hud
