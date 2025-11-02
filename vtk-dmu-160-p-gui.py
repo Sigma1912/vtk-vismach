@@ -27,6 +27,7 @@ except Exception as detail:
     raise SystemExit('Vismach requires 3d files in working directory')
 
 #for setting in sys.argv[1:]: exec(setting)
+options = sys.argv[1:]
 
 c = hal.component('vtk-dmu-160-p-gui')
 
@@ -310,4 +311,4 @@ myhud2.add_pin('    {:8.3f}',c,'twp_zz')
 myhud2.extra_text_enable = True
 #/hud
 
-main(c,model, tooltip, work, huds=[myhud,myhud2], window_width=1400, window_height=1000, window_title = 'Vtk_Vismach Tutorial')
+main(options, c, model, tooltip, work, huds=[myhud,myhud2], window_width=1400, window_height=1000, window_title = 'Vtk_Vismach Tutorial')

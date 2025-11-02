@@ -7,7 +7,8 @@ import vtk
 import os
 
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
-from PyQt5 import Qt
+from PyQt5 import Qt, QtWidgets
+from PyQt5.QtWidgets import QMainWindow
 from PyQt5.QtCore import QTimer
 
 
@@ -960,11 +961,45 @@ class Hud(vtk.vtkActor2D):
         self.textMapper.SetInput(combined_string)
 
 
+class MainWindow(Qt.QMainWindow):
+    def __init__(self, width, height, title, options):
+        super().__init__()
+        self.resize(width, height)
+        self.setWindowTitle(title)
+        self.vtkWidget = QVTKRenderWindowInteractor(self)
+        if '--no-buttons' in options:
+            print('VISMACH: Window without buttons requested')
+            self.setCentralWidget(self.vtkWidget)
+        else:
+            self.btnX = QtWidgets.QPushButton()
+            self.btnX.setText("View X")
+            self.btnY = QtWidgets.QPushButton()
+            self.btnY.setText("View Y")
+            self.btnZ = QtWidgets.QPushButton()
+            self.btnZ.setText("View Z")
+            self.btnP = QtWidgets.QPushButton()
+            self.btnP.setText("View P")
+            verticalButtonLayout = QtWidgets.QVBoxLayout()
+            verticalButtonLayout.addWidget(self.btnX)
+            verticalButtonLayout.addWidget(self.btnY)
+            verticalButtonLayout.addWidget(self.btnZ)
+            verticalButtonLayout.addWidget(self.btnP)
+            frame = QtWidgets.QFrame()
+            horizontalLayout = QtWidgets.QHBoxLayout()
+            horizontalLayout.addWidget(frame)
+            horizontalLayout.addLayout(verticalButtonLayout)
+            horizontalLayout.setStretchFactor(frame,10)
+            horizontalLayout.setStretchFactor(verticalButtonLayout,1)
+            centralwidget = QtWidgets.QWidget()
+            centralwidget.setLayout(horizontalLayout)
+            self.setCentralWidget(centralwidget)
+            vl = Qt.QVBoxLayout()
+            vl.addWidget(self.vtkWidget)
+            frame.setLayout(vl)
+            self.view = 'p'
 
 
-
-
-def main(comp,
+def main(options, comp,
          model, tooltip, work, huds,
          window_title='Vtk-Vismach', window_width=600, window_height=300,
          camera_azimuth=-50, camera_elevation=30,
@@ -1003,29 +1038,39 @@ def main(comp,
         for hud in huds:
             hud.extra_text = '\ntool2work Matrix:'+'\n'+r1+'\n'+r2+'\n'+r3
             hud.update()
-        vtkWidget.GetRenderWindow().Render()
+        mainWindow.vtkWidget.GetRenderWindow().Render()
     # close vismach if linuxcnc is closed
     def quit(*args):
         raise SystemExit
-
     signal.signal(signal.SIGTERM, quit)
     signal.signal(signal.SIGINT, quit)
     # Create the qt app
-    app = Qt.QApplication([])
+    if '--dark-theme' in options:
+        try:
+            import qdarktheme
+        except Exception as e:
+            print(e)
+            print('Try: $ pip install pyqtdarktheme-fork')
+        else:
+            qdarktheme.enable_hi_dpi()
+            app = Qt.QApplication([])
+            qdarktheme.setup_theme()
+    else:
+        app = Qt.QApplication([])
     # Qt Window
-    mainWindow = Qt.QMainWindow()
-    mainWindow.resize(window_width,window_height)
-    mainWindow.setWindowTitle(window_title)
-    # A renderer and render window
+    mainWindow = MainWindow(window_width, window_height, window_title, options)
+    # A renderer
     renderer = vtk.vtkRenderer()
     renderer.AddActor(model)
     renderer.AddActor(backplot)
+    renderer.SetBackground(*background_rgb)
+    # Huds
     if huds:
         if not isinstance(huds, list):
             huds = [huds]
         for hud in huds:
             renderer.AddActor(hud)
-    renderer.SetBackground(*background_rgb)
+    # A render window
     renderWindow = vtk.vtkRenderWindow()
     renderWindow.AddRenderer(renderer)
     # An interactor
@@ -1042,7 +1087,6 @@ def main(comp,
         return axes
     orientation_marker = vtk.vtkOrientationMarkerWidget()
     orientation_marker.SetOrientationMarker(trihedron())
-    #orientation_marker.InteractiveOn()
     # Camera setup
     camera = renderer.GetActiveCamera()
     # We want  Z pointing up and the X pointing right
@@ -1057,16 +1101,73 @@ def main(comp,
     camera.Elevation(camera_elevation)
     renderer.ResetCamera()
     # Put everything in the Qt window
-    vtkWidget = QVTKRenderWindowInteractor(mainWindow)
-    vtkWidget.GetRenderWindow().AddRenderer(renderer)
-    mainWindow.setCentralWidget(vtkWidget)
+    mainWindow.vtkWidget.GetRenderWindow().AddRenderer(renderer)
     # Set interactor style and initialize
-    interactor = vtkWidget.GetRenderWindow().GetInteractor()
+    interactor = mainWindow.vtkWidget.GetRenderWindow().GetInteractor()
     orientation_marker.SetInteractor(interactor)
     orientation_marker.EnabledOn()
     interactor_style = vtk.vtkInteractorStyleTrackballCamera()
     interactor.SetInteractorStyle(interactor_style)
     interactor.Initialize()
+    # window button events
+    if not '--no-buttons' in options:
+        def btnX_clicked():
+            print('camera.GetPosition(): ', camera.GetPosition())
+            camera.SetViewUp(0,0,1)
+            if mainWindow.view == 'x':
+                s = -10
+                mainWindow.view = '-x'
+            else:
+                s = 10
+                mainWindow.view = 'x'
+            camera.SetPosition(s,0,0)
+            camera.SetFocalPoint(0,0,0)
+            renderer.ResetCamera()
+
+        def btnY_clicked():
+            camera.SetViewUp(0,0,1)
+            if mainWindow.view == 'y':
+                s = -10
+                mainWindow.view = '-y'
+            else:
+                s = 10
+                mainWindow.view = 'y'
+            camera.SetPosition(0,s,0)
+            camera.SetFocalPoint(0,0,0)
+            renderer.ResetCamera()
+
+        def btnZ_clicked():
+            camera.SetViewUp(0,1,0)
+            if mainWindow.view == 'z':
+                s = -10
+                mainWindow.view = '-z'
+            else:
+                s = 10
+                mainWindow.view = 'z'
+            camera.SetPosition(0,0,s)
+            camera.SetFocalPoint(0,0,0)
+            renderer.ResetCamera()
+
+        def btnP_clicked():
+            # We want  Z pointing up and the X pointing right
+            camera_fp = camera.GetFocalPoint()
+            btnZ_clicked()
+            camera_t = vtk.vtkTransform()
+            camera_t.Translate(camera_fp[0], camera_fp[1], camera_fp[2])
+            camera_t.RotateX(90)
+            camera_t.RotateY(90)
+            camera_t.Translate(-camera_fp[0], -camera_fp[1], -camera_fp[2])
+            camera.ApplyTransform(camera_t)
+            camera.Azimuth(-50)
+            camera.Elevation(30)
+            renderer.ResetCamera()
+            mainWindow.view = 'p'
+        # Connect the button_clicked events
+        mainWindow.btnX.clicked.connect(btnX_clicked)
+        mainWindow.btnY.clicked.connect(btnY_clicked)
+        mainWindow.btnZ.clicked.connect(btnZ_clicked)
+        mainWindow.btnP.clicked.connect(btnP_clicked)
+
     # NOTE
     # We really only use Qt because we need a timer outside of VTK. Due to a vtk bug we cannot use
     # the vtk timer as it stops reporting when we interact with the window (eg rotating the scene)
