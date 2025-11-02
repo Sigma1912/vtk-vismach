@@ -967,6 +967,7 @@ class MainWindow(Qt.QMainWindow):
         self.resize(width, height)
         self.setWindowTitle(title)
         self.vtkWidget = QVTKRenderWindowInteractor(self)
+        self.view = 'p'
         if '--no-buttons' in options:
             print('VISMACH: Window without buttons requested')
             self.setCentralWidget(self.vtkWidget)
@@ -996,7 +997,47 @@ class MainWindow(Qt.QMainWindow):
             vl = Qt.QVBoxLayout()
             vl.addWidget(self.vtkWidget)
             frame.setLayout(vl)
-            self.view = 'p'
+            # Connect the button_clicked events
+            self.btnX.clicked.connect(self.btnX_clicked)
+            self.btnY.clicked.connect(self.btnY_clicked)
+            self.btnZ.clicked.connect(self.btnZ_clicked)
+            self.btnP.clicked.connect(self.btnP_clicked)
+
+    def btnX_clicked(self):
+        self.set_orthogonal_view('x',(0,0,1))
+
+    def btnY_clicked(self):
+        self.set_orthogonal_view('y',(0,0,1))
+
+    def btnZ_clicked(self):
+        self.set_orthogonal_view('z',(0,1,0))
+
+    def set_orthogonal_view(self,axis,up):
+        renderer = self.vtkWidget.GetRenderWindow().GetRenderers().GetFirstRenderer()
+        camera = renderer.GetActiveCamera()
+        camera.SetViewUp(*up)
+        pos = [0,0,0]
+        a = ['x','y','z'].index(axis)
+        if self.view == axis:
+            s = -10
+            self.view = '-'+axis
+        else:
+            s = 10
+            self.view = axis
+        pos[a] = s
+        camera.SetPosition(*pos)
+        camera.SetFocalPoint(0,0,0)
+        renderer.ResetCamera()
+
+    def btnP_clicked(self):
+        renderer = self.vtkWidget.GetRenderWindow().GetRenderers().GetFirstRenderer()
+        camera = renderer.GetActiveCamera()
+        self.btnX_clicked()
+        camera.Azimuth(-50)
+        camera.Elevation(30)
+        renderer.ResetCamera()
+        self.view = 'p'
+
 
 
 def main(options, comp,
@@ -1087,21 +1128,10 @@ def main(options, comp,
         return axes
     orientation_marker = vtk.vtkOrientationMarkerWidget()
     orientation_marker.SetOrientationMarker(trihedron())
-    # Camera setup
-    camera = renderer.GetActiveCamera()
-    # We want  Z pointing up and the X pointing right
-    camera_fp = camera.GetFocalPoint()
-    camera_t = vtk.vtkTransform()
-    camera_t.Translate(camera_fp[0], camera_fp[1], camera_fp[2])
-    camera_t.RotateX(90)
-    camera_t.RotateY(90)
-    camera_t.Translate(-camera_fp[0], -camera_fp[1], -camera_fp[2])
-    camera.ApplyTransform(camera_t)
-    camera.Azimuth(camera_azimuth)
-    camera.Elevation(camera_elevation)
-    renderer.ResetCamera()
     # Put everything in the Qt window
     mainWindow.vtkWidget.GetRenderWindow().AddRenderer(renderer)
+    # Set initial view
+    mainWindow.btnP_clicked()
     # Set interactor style and initialize
     interactor = mainWindow.vtkWidget.GetRenderWindow().GetInteractor()
     orientation_marker.SetInteractor(interactor)
@@ -1109,67 +1139,8 @@ def main(options, comp,
     interactor_style = vtk.vtkInteractorStyleTrackballCamera()
     interactor.SetInteractorStyle(interactor_style)
     interactor.Initialize()
-    # window button events
-    if not '--no-buttons' in options:
-        def btnX_clicked():
-            print('camera.GetPosition(): ', camera.GetPosition())
-            camera.SetViewUp(0,0,1)
-            if mainWindow.view == 'x':
-                s = -10
-                mainWindow.view = '-x'
-            else:
-                s = 10
-                mainWindow.view = 'x'
-            camera.SetPosition(s,0,0)
-            camera.SetFocalPoint(0,0,0)
-            renderer.ResetCamera()
-
-        def btnY_clicked():
-            camera.SetViewUp(0,0,1)
-            if mainWindow.view == 'y':
-                s = -10
-                mainWindow.view = '-y'
-            else:
-                s = 10
-                mainWindow.view = 'y'
-            camera.SetPosition(0,s,0)
-            camera.SetFocalPoint(0,0,0)
-            renderer.ResetCamera()
-
-        def btnZ_clicked():
-            camera.SetViewUp(0,1,0)
-            if mainWindow.view == 'z':
-                s = -10
-                mainWindow.view = '-z'
-            else:
-                s = 10
-                mainWindow.view = 'z'
-            camera.SetPosition(0,0,s)
-            camera.SetFocalPoint(0,0,0)
-            renderer.ResetCamera()
-
-        def btnP_clicked():
-            # We want  Z pointing up and the X pointing right
-            camera_fp = camera.GetFocalPoint()
-            btnZ_clicked()
-            camera_t = vtk.vtkTransform()
-            camera_t.Translate(camera_fp[0], camera_fp[1], camera_fp[2])
-            camera_t.RotateX(90)
-            camera_t.RotateY(90)
-            camera_t.Translate(-camera_fp[0], -camera_fp[1], -camera_fp[2])
-            camera.ApplyTransform(camera_t)
-            camera.Azimuth(-50)
-            camera.Elevation(30)
-            renderer.ResetCamera()
-            mainWindow.view = 'p'
-        # Connect the button_clicked events
-        mainWindow.btnX.clicked.connect(btnX_clicked)
-        mainWindow.btnY.clicked.connect(btnY_clicked)
-        mainWindow.btnZ.clicked.connect(btnZ_clicked)
-        mainWindow.btnP.clicked.connect(btnP_clicked)
-
     # NOTE
-    # We really only use Qt because we need a timer outside of VTK. Due to a vtk bug we cannot use
+    # We really only used Qt because we need a timer outside of VTK. Due to a vtk bug we cannot use
     # the vtk timer as it stops reporting when we interact with the window (eg rotating the scene)
     # Set up a Qt timer to create update events
     timer = QTimer()
