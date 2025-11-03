@@ -52,10 +52,10 @@ class ArgsBase(object):
         self._coords = args
         # prepare so at least the first update is run as instances with static values are not updated after
         self.first_update = True
-        if hasattr(self, "create"):
+        if hasattr(self, 'create'):
             self.create()
         # We cannot wait for the 1. update cycle because camera needs something to set the view on startup
-        if hasattr(self, "update"):
+        if hasattr(self, 'update'):
             self.update()
 
     def coords(self):
@@ -967,24 +967,31 @@ class MainWindow(Qt.QMainWindow):
         self.resize(width, height)
         self.setWindowTitle(title)
         self.vtkWidget = QVTKRenderWindowInteractor(self)
+        self.parProj = False
         self.view = 'p'
         if '--no-buttons' in options:
             print('VISMACH: Window without buttons requested')
             self.setCentralWidget(self.vtkWidget)
         else:
+            self.btnParProj = QtWidgets.QPushButton()
+            self.btnParProj.setText('Parallel Projection\n ON/OFF')
             self.btnX = QtWidgets.QPushButton()
-            self.btnX.setText("View X")
+            self.btnX.setText('View X')
             self.btnY = QtWidgets.QPushButton()
-            self.btnY.setText("View Y")
+            self.btnY.setText('View Y')
             self.btnZ = QtWidgets.QPushButton()
-            self.btnZ.setText("View Z")
+            self.btnZ.setText('View Z')
             self.btnP = QtWidgets.QPushButton()
-            self.btnP.setText("View P")
+            self.btnP.setText('View P')
+            self.btnCamOnWork = QtWidgets.QPushButton()
+            self.btnCamOnWork.setText('Cam on Work')
             verticalButtonLayout = QtWidgets.QVBoxLayout()
+            verticalButtonLayout.addWidget(self.btnParProj)
             verticalButtonLayout.addWidget(self.btnX)
             verticalButtonLayout.addWidget(self.btnY)
             verticalButtonLayout.addWidget(self.btnZ)
             verticalButtonLayout.addWidget(self.btnP)
+            verticalButtonLayout.addWidget(self.btnCamOnWork)
             frame = QtWidgets.QFrame()
             horizontalLayout = QtWidgets.QHBoxLayout()
             horizontalLayout.addWidget(frame)
@@ -998,10 +1005,19 @@ class MainWindow(Qt.QMainWindow):
             vl.addWidget(self.vtkWidget)
             frame.setLayout(vl)
             # Connect the button_clicked events
+            self.btnParProj.clicked.connect(self.btnParProj_clicked)
             self.btnX.clicked.connect(self.btnX_clicked)
             self.btnY.clicked.connect(self.btnY_clicked)
             self.btnZ.clicked.connect(self.btnZ_clicked)
             self.btnP.clicked.connect(self.btnP_clicked)
+            self.btnCamOnWork.clicked.connect(self.btnCamOnWork_clicked)
+
+    def btnParProj_clicked(self):
+        renderer = self.vtkWidget.GetRenderWindow().GetRenderers().GetFirstRenderer()
+        camera = renderer.GetActiveCamera()
+        camera.SetParallelProjection(not self.parProj)
+        self.parProj = not self.parProj
+        #renderer.ResetCamera()
 
     def btnX_clicked(self):
         self.set_orthogonal_view('x',(0,0,1))
@@ -1037,6 +1053,10 @@ class MainWindow(Qt.QMainWindow):
         camera.Elevation(30)
         renderer.ResetCamera()
         self.view = 'p'
+
+    def btnCamOnWork_clicked(self):
+        self.view = 'CoW'
+
 
 
 
@@ -1080,6 +1100,7 @@ def main(options, comp,
             hud.extra_text = '\ntool2work Matrix:'+'\n'+r1+'\n'+r2+'\n'+r3
             hud.update()
         mainWindow.vtkWidget.GetRenderWindow().Render()
+
     # close vismach if linuxcnc is closed
     def quit(*args):
         raise SystemExit
