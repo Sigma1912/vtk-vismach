@@ -969,7 +969,9 @@ class MainWindow(Qt.QMainWindow):
         self.vtkWidget = QVTKRenderWindowInteractor(self)
         self.parProj = False
         self.view = 'p'
+        self.camOnTool = False
         self.camOnWork = False
+        self.tool_last = (0,0,0)
         self.work_last = (0,0,0)
         if '--no-buttons' in options:
             print('VISMACH: Window without buttons requested')
@@ -989,6 +991,8 @@ class MainWindow(Qt.QMainWindow):
             self.btnZUp.setText('Set Z up')
             self.btnShowAll = QtWidgets.QPushButton()
             self.btnShowAll.setText('Show All')
+            self.btnCamOnTool = QtWidgets.QPushButton()
+            self.btnCamOnTool.setText('Cam on Tool\n ON/OFF')
             self.btnCamOnWork = QtWidgets.QPushButton()
             self.btnCamOnWork.setText('Cam on Work\n ON/OFF')
             verticalButtonLayout = QtWidgets.QVBoxLayout()
@@ -999,6 +1003,7 @@ class MainWindow(Qt.QMainWindow):
             verticalButtonLayout.addWidget(self.btnP)
             verticalButtonLayout.addWidget(self.btnZUp)
             verticalButtonLayout.addWidget(self.btnShowAll)
+            verticalButtonLayout.addWidget(self.btnCamOnTool)
             verticalButtonLayout.addWidget(self.btnCamOnWork)
             frame = QtWidgets.QFrame()
             horizontalLayout = QtWidgets.QHBoxLayout()
@@ -1020,6 +1025,7 @@ class MainWindow(Qt.QMainWindow):
             self.btnP.clicked.connect(self.btnP_clicked)
             self.btnZUp.clicked.connect(self.btnZUp_clicked)
             self.btnShowAll.clicked.connect(self.btnShowAll_clicked)
+            self.btnCamOnTool.clicked.connect(self.btnCamOnTool_clicked)
             self.btnCamOnWork.clicked.connect(self.btnCamOnWork_clicked)
 
     def btnParProj_clicked(self):
@@ -1073,6 +1079,9 @@ class MainWindow(Qt.QMainWindow):
         camera = renderer.GetActiveCamera()
         renderer.ResetCamera()
 
+    def btnCamOnTool_clicked(self):
+        self.camOnTool = not self.camOnTool
+
     def btnCamOnWork_clicked(self):
         self.camOnWork = not self.camOnWork
 
@@ -1118,6 +1127,18 @@ def main(options, comp,
         for hud in huds:
             hud.extra_text = '\ntool2work Matrix:'+'\n'+r1+'\n'+r2+'\n'+r3
             hud.update()
+        if mainWindow.camOnTool:
+            renderer = mainWindow.vtkWidget.GetRenderWindow().GetRenderers().GetFirstRenderer()
+            camera = renderer.GetActiveCamera()
+            fp = camera.GetFocalPoint()
+            cp = camera.GetPosition()
+            x = tooltip.current_matrix.GetElement(0,3)
+            y = tooltip.current_matrix.GetElement(1,3)
+            z = tooltip.current_matrix.GetElement(2,3)
+            xl,yl,zl = mainWindow.tool_last
+            camera.SetFocalPoint(fp[0]+x-xl, fp[1]+y-yl, fp[2]+z-zl)
+            camera.SetPosition(cp[0]+x-xl, cp[1]+y-yl, cp[2]+z-zl)
+            mainWindow.tool_last=(x,y,z)
         if mainWindow.camOnWork:
             renderer = mainWindow.vtkWidget.GetRenderWindow().GetRenderers().GetFirstRenderer()
             camera = renderer.GetActiveCamera()
