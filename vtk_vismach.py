@@ -966,74 +966,105 @@ class MainWindow(Qt.QMainWindow):
         super().__init__()
         self.resize(width, height)
         self.setWindowTitle(title)
-        self.vtkWidget = QVTKRenderWindowInteractor(self)
         self.parProj = False
         self.view = 'p'
-        self.camOnTool = False
-        self.camOnWork = False
-        self.tool_last = (0,0,0)
-        self.work_last = (0,0,0)
+        self.trackTool = False
+        self.trackWork = False
+        self.last_tracking_position = (0,0,0)
         if '--no-buttons' in options:
             print('VISMACH: Window without buttons requested')
-            self.setCentralWidget(self.vtkWidget)
+            self.setCentralWidget(self.vtkInteractor)
         else:
-            self.btnParProj = QtWidgets.QPushButton()
-            self.btnParProj.setText('Parallel Projection\n ON/OFF')
+            # Side panel for the buttons
+            btnVLyt = QtWidgets.QVBoxLayout()
+            # Projection
+            frmProjVLt = QtWidgets.QVBoxLayout()
+            frmProjVLt.addWidget(QtWidgets.QLabel('Projection'))
+            self.rbtnProj = QtWidgets.QRadioButton("Perspective")
+            self.rbtnProj.setChecked(True)
+            self.rbtnProj.projection = "Perspective"
+            self.rbtnProj.toggled.connect(self.rbtnProj_clicked)
+            frmProjVLt.addWidget(self.rbtnProj)
+            self.rbtnProj = QtWidgets.QRadioButton("Parallel")
+            self.rbtnProj.projection = "Parallel"
+            self.rbtnProj.toggled.connect(self.rbtnProj_clicked)
+            frmProjVLt.addWidget(self.rbtnProj)
+            frmProj = QtWidgets.QFrame()
+            frmProj.setFrameShape(QtWidgets.QFrame.Shape.Box)
+            frmProj.setLayout(frmProjVLt)
+            btnVLyt.addWidget(frmProj)
+            # View
             self.btnX = QtWidgets.QPushButton()
             self.btnX.setText('View X')
+            self.btnX.clicked.connect(self.btnX_clicked)
+            btnVLyt.addWidget(self.btnX)
             self.btnY = QtWidgets.QPushButton()
             self.btnY.setText('View Y')
+            self.btnY.clicked.connect(self.btnY_clicked)
+            btnVLyt.addWidget(self.btnY)
             self.btnZ = QtWidgets.QPushButton()
             self.btnZ.setText('View Z')
+            self.btnZ.clicked.connect(self.btnZ_clicked)
+            btnVLyt.addWidget(self.btnZ)
             self.btnP = QtWidgets.QPushButton()
             self.btnP.setText('View P')
+            self.btnP.clicked.connect(self.btnP_clicked)
+            btnVLyt.addWidget(self.btnP)
             self.btnZUp = QtWidgets.QPushButton()
             self.btnZUp.setText('Set Z up')
+            self.btnZUp.clicked.connect(self.btnZUp_clicked)
+            btnVLyt.addWidget(self.btnZUp)
             self.btnShowAll = QtWidgets.QPushButton()
             self.btnShowAll.setText('Show All')
-            self.btnCamOnTool = QtWidgets.QPushButton()
-            self.btnCamOnTool.setText('Cam on Tool\n ON/OFF')
-            self.btnCamOnWork = QtWidgets.QPushButton()
-            self.btnCamOnWork.setText('Cam on Work\n ON/OFF')
-            verticalButtonLayout = QtWidgets.QVBoxLayout()
-            verticalButtonLayout.addWidget(self.btnParProj)
-            verticalButtonLayout.addWidget(self.btnX)
-            verticalButtonLayout.addWidget(self.btnY)
-            verticalButtonLayout.addWidget(self.btnZ)
-            verticalButtonLayout.addWidget(self.btnP)
-            verticalButtonLayout.addWidget(self.btnZUp)
-            verticalButtonLayout.addWidget(self.btnShowAll)
-            verticalButtonLayout.addWidget(self.btnCamOnTool)
-            verticalButtonLayout.addWidget(self.btnCamOnWork)
-            frame = QtWidgets.QFrame()
-            horizontalLayout = QtWidgets.QHBoxLayout()
-            horizontalLayout.addWidget(frame)
-            horizontalLayout.addLayout(verticalButtonLayout)
-            horizontalLayout.setStretchFactor(frame,10)
-            horizontalLayout.setStretchFactor(verticalButtonLayout,1)
-            centralwidget = QtWidgets.QWidget()
-            centralwidget.setLayout(horizontalLayout)
-            self.setCentralWidget(centralwidget)
-            vl = Qt.QVBoxLayout()
-            vl.addWidget(self.vtkWidget)
-            frame.setLayout(vl)
-            # Connect the button_clicked events
-            self.btnParProj.clicked.connect(self.btnParProj_clicked)
-            self.btnX.clicked.connect(self.btnX_clicked)
-            self.btnY.clicked.connect(self.btnY_clicked)
-            self.btnZ.clicked.connect(self.btnZ_clicked)
-            self.btnP.clicked.connect(self.btnP_clicked)
-            self.btnZUp.clicked.connect(self.btnZUp_clicked)
             self.btnShowAll.clicked.connect(self.btnShowAll_clicked)
-            self.btnCamOnTool.clicked.connect(self.btnCamOnTool_clicked)
-            self.btnCamOnWork.clicked.connect(self.btnCamOnWork_clicked)
+            btnVLyt.addWidget(self.btnShowAll)
+            # Camera tracking
+            frmTrkgVLyt = QtWidgets.QVBoxLayout()
+            frmTrkgVLyt.addWidget(QtWidgets.QLabel('Tracking'))
+            self.rbtnTrkg = QtWidgets.QRadioButton("None")
+            self.rbtnTrkg.setChecked(True)
+            self.rbtnTrkg.tracking = "None"
+            self.rbtnTrkg.toggled.connect(self.rbtnTrkg_clicked)
+            frmTrkgVLyt.addWidget(self.rbtnTrkg)
+            self.rbtnTrkg = QtWidgets.QRadioButton("Tool")
+            self.rbtnTrkg.tracking = "Tool"
+            self.rbtnTrkg.toggled.connect(self.rbtnTrkg_clicked)
+            frmTrkgVLyt.addWidget(self.rbtnTrkg)
+            self.rbtnTrkg = QtWidgets.QRadioButton("Work")
+            self.rbtnTrkg.tracking = "Work"
+            self.rbtnTrkg.toggled.connect(self.rbtnTrkg_clicked)
+            frmTrkgVLyt.addWidget(self.rbtnTrkg)
+            frmTrkg = QtWidgets.QFrame()
+            frmTrkg.setFrameShape(QtWidgets.QFrame.Shape.Box)
+            frmTrkg.setLayout(frmTrkgVLyt)
+            btnVLyt.addWidget(frmTrkg)
+            btnVLyt.addStretch()
+            # VTK Interactor (this is where the model is going to be)
+            self.vtkInteractor = QVTKRenderWindowInteractor(self)
+            # Main layout
+            mainHLyt = QtWidgets.QHBoxLayout()
+            mainHLyt.addWidget(self.vtkInteractor)
+            mainHLyt.addLayout(btnVLyt)
+            mainHLyt.setStretchFactor(self.vtkInteractor,10)
+            mainHLyt.setStretchFactor(btnVLyt,1)
+            # Centralwidget
+            centralwidget = QtWidgets.QWidget()
+            centralwidget.setLayout(mainHLyt)
+            self.setCentralWidget(centralwidget)
 
     def btnParProj_clicked(self):
-        renderer = self.vtkWidget.GetRenderWindow().GetRenderers().GetFirstRenderer()
-        camera = renderer.GetActiveCamera()
+
         camera.SetParallelProjection(not self.parProj)
         self.parProj = not self.parProj
-        #renderer.ResetCamera()
+
+    def rbtnProj_clicked(self):
+        renderer = self.vtkInteractor.GetRenderWindow().GetRenderers().GetFirstRenderer()
+        camera = renderer.GetActiveCamera()
+        self.rbtnProj = self.sender()
+        if self.rbtnProj.projection == "Perspective":
+            camera.SetParallelProjection(False)
+        elif self.rbtnProj.projection == "Parallel":
+            camera.SetParallelProjection(True)
 
     def btnX_clicked(self):
         self.set_orthogonal_view('x',(0,0,1))
@@ -1045,7 +1076,7 @@ class MainWindow(Qt.QMainWindow):
         self.set_orthogonal_view('z',(0,1,0))
 
     def set_orthogonal_view(self,axis,up):
-        renderer = self.vtkWidget.GetRenderWindow().GetRenderers().GetFirstRenderer()
+        renderer = self.vtkInteractor.GetRenderWindow().GetRenderers().GetFirstRenderer()
         camera = renderer.GetActiveCamera()
         camera.SetViewUp(*up)
         pos = [0,0,0]
@@ -1062,7 +1093,7 @@ class MainWindow(Qt.QMainWindow):
         renderer.ResetCamera()
 
     def btnP_clicked(self):
-        renderer = self.vtkWidget.GetRenderWindow().GetRenderers().GetFirstRenderer()
+        renderer = self.vtkInteractor.GetRenderWindow().GetRenderers().GetFirstRenderer()
         camera = renderer.GetActiveCamera()
         self.btnX_clicked()
         camera.Azimuth(-50)
@@ -1070,20 +1101,23 @@ class MainWindow(Qt.QMainWindow):
         self.view = 'p'
 
     def btnZUp_clicked(self):
-        renderer = self.vtkWidget.GetRenderWindow().GetRenderers().GetFirstRenderer()
+        renderer = self.vtkInteractor.GetRenderWindow().GetRenderers().GetFirstRenderer()
         camera = renderer.GetActiveCamera()
         camera.SetViewUp(0,0,1)
 
     def btnShowAll_clicked(self):
-        renderer = self.vtkWidget.GetRenderWindow().GetRenderers().GetFirstRenderer()
+        renderer = self.vtkInteractor.GetRenderWindow().GetRenderers().GetFirstRenderer()
         camera = renderer.GetActiveCamera()
         renderer.ResetCamera()
 
-    def btnCamOnTool_clicked(self):
-        self.camOnTool = not self.camOnTool
-
-    def btnCamOnWork_clicked(self):
-        self.camOnWork = not self.camOnWork
+    def rbtnTrkg_clicked(self):
+        self.rbtnTrkg = self.sender()
+        if self.rbtnTrkg.tracking == "Tool":
+            self.trackTool = True
+            self.trackWork = False
+        elif self.rbtnTrkg.tracking == "Work":
+            self.trackWork = True
+            self.trackTool = False
 
 
 
@@ -1127,31 +1161,21 @@ def main(options, comp,
         for hud in huds:
             hud.extra_text = '\ntool2work Matrix:'+'\n'+r1+'\n'+r2+'\n'+r3
             hud.update()
-        if mainWindow.camOnTool:
-            renderer = mainWindow.vtkWidget.GetRenderWindow().GetRenderers().GetFirstRenderer()
+        if mainWindow.trackTool or  mainWindow.trackWork:
+            renderer = mainWindow.vtkInteractor.GetRenderWindow().GetRenderers().GetFirstRenderer()
             camera = renderer.GetActiveCamera()
             fp = camera.GetFocalPoint()
             cp = camera.GetPosition()
-            x = tooltip.current_matrix.GetElement(0,3)
-            y = tooltip.current_matrix.GetElement(1,3)
-            z = tooltip.current_matrix.GetElement(2,3)
-            xl,yl,zl = mainWindow.tool_last
-            camera.SetFocalPoint(fp[0]+x-xl, fp[1]+y-yl, fp[2]+z-zl)
-            camera.SetPosition(cp[0]+x-xl, cp[1]+y-yl, cp[2]+z-zl)
-            mainWindow.tool_last=(x,y,z)
-        if mainWindow.camOnWork:
-            renderer = mainWindow.vtkWidget.GetRenderWindow().GetRenderers().GetFirstRenderer()
-            camera = renderer.GetActiveCamera()
-            fp = camera.GetFocalPoint()
-            cp = camera.GetPosition()
-            x = work.current_matrix.GetElement(0,3)
-            y = work.current_matrix.GetElement(1,3)
-            z = work.current_matrix.GetElement(2,3)
-            xl,yl,zl = mainWindow.work_last
-            camera.SetFocalPoint(fp[0]+x-xl, fp[1]+y-yl, fp[2]+z-zl)
-            camera.SetPosition(cp[0]+x-xl, cp[1]+y-yl, cp[2]+z-zl)
-            mainWindow.work_last=(x,y,z)
-        mainWindow.vtkWidget.GetRenderWindow().Render()
+            if mainWindow.trackTool:
+                matrix = tooltip.current_matrix
+            else:
+                matrix = work.current_matrix
+            x, y, z = matrix.GetElement(0,3), matrix.GetElement(1,3), matrix.GetElement(2,3)
+            xl,yl,zl = mainWindow.last_tracking_position
+            camera.SetFocalPoint(fp[0] + x - xl, fp[1] + y - yl, fp[2] + z - zl)
+            camera.SetPosition  (cp[0] + x - xl, cp[1] + y - yl, cp[2] + z - zl)
+            mainWindow.last_tracking_position = x,y,z
+        mainWindow.vtkInteractor.GetRenderWindow().Render()
 
     # close vismach if linuxcnc is closed
     def quit(*args):
@@ -1202,11 +1226,11 @@ def main(options, comp,
     orientation_marker = vtk.vtkOrientationMarkerWidget()
     orientation_marker.SetOrientationMarker(trihedron())
     # Put everything in the Qt window
-    mainWindow.vtkWidget.GetRenderWindow().AddRenderer(renderer)
+    mainWindow.vtkInteractor.GetRenderWindow().AddRenderer(renderer)
     # Set initial view
     mainWindow.btnP_clicked()
     # Set interactor style and initialize
-    interactor = mainWindow.vtkWidget.GetRenderWindow().GetInteractor()
+    interactor = mainWindow.vtkInteractor.GetRenderWindow().GetInteractor()
     orientation_marker.SetInteractor(interactor)
     orientation_marker.EnabledOn()
     interactor_style = vtk.vtkInteractorStyleTrackballCamera()
