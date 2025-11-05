@@ -819,7 +819,6 @@ class Plotter(vtk.vtkActor):
         y = plot_transform.GetMatrix().GetElement(1,3)
         z = plot_transform.GetMatrix().GetElement(2,3)
         current_position = (x, y, z)
-        clear = self.comp[self.clear] if self.comp else hal.get_value(self.clear)
         if self.comp[self.clear] or self.initial_run:
             self.points.Reset()
             self.setup_points([x,y,z])
@@ -962,16 +961,17 @@ class Hud(vtk.vtkActor2D):
 
 
 class MainWindow(Qt.QMainWindow):
-    def __init__(self, width, height, title, options):
+    def __init__(self, width, height, title, argv_options, backplot):
         super().__init__()
         self.resize(width, height)
         self.setWindowTitle(title)
+        self.backplot = backplot
         self.parProj = False
         self.view = ' '
         self.trackTool = False
         self.trackWork = False
         self.last_tracking_position = (0,0,0)
-        if '--no-buttons' in options:
+        if '--no-buttons' in argv_options:
             print('VISMACH: Window without buttons requested')
             self.setCentralWidget(self.vtkInteractor)
         else:
@@ -979,15 +979,15 @@ class MainWindow(Qt.QMainWindow):
             sdePnlLyt = QtWidgets.QVBoxLayout()
             # Projection
             grpProjLyt = QtWidgets.QVBoxLayout()
-            self.rbtnIsomtrcroj = QtWidgets.QRadioButton("Perspective")
-            self.rbtnIsomtrcroj.setChecked(True)
-            self.rbtnIsomtrcroj.projection = "Perspective"
-            self.rbtnIsomtrcroj.toggled.connect(self.rbtnIsomtrcroj_clicked)
-            grpProjLyt.addWidget(self.rbtnIsomtrcroj)
-            self.rbtnIsomtrcroj = QtWidgets.QRadioButton("Parallel")
-            self.rbtnIsomtrcroj.projection = "Parallel"
-            self.rbtnIsomtrcroj.toggled.connect(self.rbtnIsomtrcroj_clicked)
-            grpProjLyt.addWidget(self.rbtnIsomtrcroj)
+            self.rbtnPrsptve = QtWidgets.QRadioButton("Perspective")
+            self.rbtnPrsptve.setChecked(True)
+            self.rbtnPrsptve.projection = "Perspective"
+            self.rbtnPrsptve.toggled.connect(self.rbtnPrsptve_clicked)
+            grpProjLyt.addWidget(self.rbtnPrsptve)
+            self.rbtnPrsptve = QtWidgets.QRadioButton("Parallel")
+            self.rbtnPrsptve.projection = "Parallel"
+            self.rbtnPrsptve.toggled.connect(self.rbtnPrsptve_clicked)
+            grpProjLyt.addWidget(self.rbtnPrsptve)
             grpProj = QtWidgets.QGroupBox("Projection")
             grpProj.setLayout(grpProjLyt)
             sdePnlLyt.addWidget(grpProj)
@@ -1005,10 +1005,10 @@ class MainWindow(Qt.QMainWindow):
             self.btnXY.setText('XY / -XY')
             self.btnXY.clicked.connect(self.btnXY_clicked)
             grpViewLyt.addWidget(self.btnXY)
-            self.btnIsomtrc = QtWidgets.QPushButton()
-            self.btnIsomtrc.setText('Isometric')
-            self.btnIsomtrc.clicked.connect(self.btnIsomtrc_clicked)
-            grpViewLyt.addWidget(self.btnIsomtrc)
+            self.btnDimtrc = QtWidgets.QPushButton()
+            self.btnDimtrc.setText('Dimetric')
+            self.btnDimtrc.clicked.connect(self.btnDimtrc_clicked)
+            grpViewLyt.addWidget(self.btnDimtrc)
             grpView = QtWidgets.QGroupBox("Ortho View")
             grpView.setLayout(grpViewLyt)
             sdePnlLyt.addWidget(grpView)
@@ -1039,6 +1039,11 @@ class MainWindow(Qt.QMainWindow):
             grpTrkg = QtWidgets.QGroupBox("Tracking")
             grpTrkg.setLayout(grpTrkgLyt)
             sdePnlLyt.addWidget(grpTrkg)
+            # clear backplot
+            self.btnClrPlot = QtWidgets.QPushButton()
+            self.btnClrPlot.setText('Clear Backplot')
+            self.btnClrPlot.clicked.connect(self.btnClrPlot_clicked)
+            sdePnlLyt.addWidget(self.btnClrPlot)
             sdePnlLyt.addStretch()
             # VTK Interactor (this is where the model is going to be)
             self.vtkInteractor = QVTKRenderWindowInteractor(self)
@@ -1053,18 +1058,18 @@ class MainWindow(Qt.QMainWindow):
             centralwidget.setLayout(mainHLyt)
             self.setCentralWidget(centralwidget)
 
-    def btnIsomtrcarProj_clicked(self):
+    def btnDimtrcarProj_clicked(self):
 
         camera.SetParallelProjection(not self.parProj)
         self.parProj = not self.parProj
 
-    def rbtnIsomtrcroj_clicked(self):
+    def rbtnPrsptve_clicked(self):
         renderer = self.vtkInteractor.GetRenderWindow().GetRenderers().GetFirstRenderer()
         camera = renderer.GetActiveCamera()
-        self.rbtnIsomtrcroj = self.sender()
-        if self.rbtnIsomtrcroj.projection == "Perspective":
+        self.rbtnPrsptve = self.sender()
+        if self.rbtnPrsptve.projection == "Perspective":
             camera.SetParallelProjection(False)
-        elif self.rbtnIsomtrcroj.projection == "Parallel":
+        elif self.rbtnPrsptve.projection == "Parallel":
             camera.SetParallelProjection(True)
 
     def btnYZ_clicked(self):
@@ -1093,7 +1098,7 @@ class MainWindow(Qt.QMainWindow):
         camera.SetFocalPoint(0,0,0)
         renderer.ResetCamera()
 
-    def btnIsomtrc_clicked(self):
+    def btnDimtrc_clicked(self):
         renderer = self.vtkInteractor.GetRenderWindow().GetRenderers().GetFirstRenderer()
         camera = renderer.GetActiveCamera()
         camera.SetViewUp(0,0,1)
@@ -1106,7 +1111,7 @@ class MainWindow(Qt.QMainWindow):
         else:
             camera.Azimuth(-45)
             self.view = 'p0'
-        # exact isometric view creates flat lighting so we don't use 35.264° elevation
+        # isometric view creates flat lighting so we use dimetric
         camera.Elevation(30)
         renderer.ResetCamera()
 
@@ -1131,10 +1136,12 @@ class MainWindow(Qt.QMainWindow):
             self.trackWork = True
             self.trackTool = False
 
+    def btnClrPlot_clicked(self):
+        self.backplot.initial_run = True
 
 
 
-def main(options, comp,
+def main(argv_options, comp,
          model, tooltip, work, huds,
          window_title='Vtk-Vismach', window_width=600, window_height=300,
          camera_azimuth=-50, camera_elevation=30,
@@ -1157,9 +1164,11 @@ def main(options, comp,
                     item.capture()
                 if isinstance(item, vtk.vtkAssembly):
                     get_actors_to_update(item)
+        # Update model
         get_actors_to_update(model)
+        # Update backplot
         backplot.update()
-
+        # Update halpins
         comp['work_pos_x'] = work.current_matrix.GetElement(0,3)
         comp['work_pos_y'] = work.current_matrix.GetElement(1,3)
         comp['work_pos_z'] = work.current_matrix.GetElement(2,3)
@@ -1170,9 +1179,11 @@ def main(options, comp,
         r1=('{:8.3f} {:8.3f} {:8.3f} {:8.3f}'.format(t2w.GetElement(0,0), t2w.GetElement(0,1), t2w.GetElement(0,2), t2w.GetElement(0,3)))
         r2=('{:8.3f} {:8.3f} {:8.3f} {:8.3f}'.format(t2w.GetElement(1,0), t2w.GetElement(1,1), t2w.GetElement(1,2), t2w.GetElement(1,3)))
         r3=('{:8.3f} {:8.3f} {:8.3f} {:8.3f}'.format(t2w.GetElement(2,0), t2w.GetElement(2,1), t2w.GetElement(2,2), t2w.GetElement(2,3)))
+        # Update HUD
         for hud in huds:
             hud.extra_text = '\ntool2work Matrix:'+'\n'+r1+'\n'+r2+'\n'+r3
             hud.update()
+        # Update camera tracking
         if mainWindow.trackTool or  mainWindow.trackWork:
             renderer = mainWindow.vtkInteractor.GetRenderWindow().GetRenderers().GetFirstRenderer()
             camera = renderer.GetActiveCamera()
@@ -1187,6 +1198,7 @@ def main(options, comp,
             camera.SetFocalPoint(fp[0] + x - xl, fp[1] + y - yl, fp[2] + z - zl)
             camera.SetPosition  (cp[0] + x - xl, cp[1] + y - yl, cp[2] + z - zl)
             mainWindow.last_tracking_position = x,y,z
+        # Render updated data
         mainWindow.vtkInteractor.GetRenderWindow().Render()
 
     # close vismach if linuxcnc is closed
@@ -1195,7 +1207,7 @@ def main(options, comp,
     signal.signal(signal.SIGTERM, quit)
     signal.signal(signal.SIGINT, quit)
     # Create the qt app
-    if '--dark-theme' in options:
+    if '--dark-theme' in argv_options:
         try:
             import qdarktheme
         except Exception as e:
@@ -1208,7 +1220,7 @@ def main(options, comp,
     else:
         app = Qt.QApplication([])
     # Qt Window
-    mainWindow = MainWindow(window_width, window_height, window_title, options)
+    mainWindow = MainWindow(window_width, window_height, window_title, argv_options, backplot)
     # A renderer
     renderer = vtk.vtkRenderer()
     renderer.AddActor(model)
@@ -1240,7 +1252,7 @@ def main(options, comp,
     # Put everything in the Qt window
     mainWindow.vtkInteractor.GetRenderWindow().AddRenderer(renderer)
     # Set initial view
-    mainWindow.btnIsomtrc_clicked()
+    mainWindow.btnDimtrc_clicked()
     # Set interactor style and initialize
     interactor = mainWindow.vtkInteractor.GetRenderWindow().GetInteractor()
     orientation_marker.SetInteractor(interactor)

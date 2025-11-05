@@ -263,13 +263,13 @@ model = Collection([
         spindle_xz,
         table,
         base,
-        arrow,
+        #arrow,
         #CylinderX(hal,'joint.0.pos-fb',50),
         #Box(hal,'joint.1.pos-fb',0,0,100,100,-100),
         #Sphere(0,0,0,5),
         #Line(hal,('joint.1.pos-fb',-1),100,100,-1000,-1000,1000,2),
         #rrowOriented(hal,0,0,0,'vismach.work_pos_x','vismach.work_pos_y','vismach.work_pos_z',50),
-        ArrowOriented(c,'tool_pos_x','tool_pos_y','tool_pos_z','work_pos_x','work_pos_y','work_pos_z',50),
+        #ArrowOriented(c,'tool_pos_x','tool_pos_y','tool_pos_z','work_pos_x','work_pos_y','work_pos_z',50),
         #CylinderOriented(hal,'joint.1.pos-fb',100,100,-1000,-1000,1000,50)
         ])
 
