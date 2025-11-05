@@ -1058,11 +1058,6 @@ class MainWindow(Qt.QMainWindow):
             centralwidget.setLayout(mainHLyt)
             self.setCentralWidget(centralwidget)
 
-    def btnDimtrcarProj_clicked(self):
-
-        camera.SetParallelProjection(not self.parProj)
-        self.parProj = not self.parProj
-
     def rbtnPrsptve_clicked(self):
         renderer = self.vtkInteractor.GetRenderWindow().GetRenderers().GetFirstRenderer()
         camera = renderer.GetActiveCamera()
