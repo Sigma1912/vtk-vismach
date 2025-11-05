@@ -967,7 +967,7 @@ class MainWindow(Qt.QMainWindow):
         self.resize(width, height)
         self.setWindowTitle(title)
         self.parProj = False
-        self.view = 'p'
+        self.view = ' '
         self.trackTool = False
         self.trackWork = False
         self.last_tracking_position = (0,0,0)
@@ -976,106 +976,107 @@ class MainWindow(Qt.QMainWindow):
             self.setCentralWidget(self.vtkInteractor)
         else:
             # Side panel for the buttons
-            btnVLyt = QtWidgets.QVBoxLayout()
+            sdePnlLyt = QtWidgets.QVBoxLayout()
             # Projection
-            frmProjVLt = QtWidgets.QVBoxLayout()
-            frmProjVLt.addWidget(QtWidgets.QLabel('Projection'))
-            self.rbtnProj = QtWidgets.QRadioButton("Perspective")
-            self.rbtnProj.setChecked(True)
-            self.rbtnProj.projection = "Perspective"
-            self.rbtnProj.toggled.connect(self.rbtnProj_clicked)
-            frmProjVLt.addWidget(self.rbtnProj)
-            self.rbtnProj = QtWidgets.QRadioButton("Parallel")
-            self.rbtnProj.projection = "Parallel"
-            self.rbtnProj.toggled.connect(self.rbtnProj_clicked)
-            frmProjVLt.addWidget(self.rbtnProj)
-            frmProj = QtWidgets.QFrame()
-            frmProj.setFrameShape(QtWidgets.QFrame.Shape.Box)
-            frmProj.setLayout(frmProjVLt)
-            btnVLyt.addWidget(frmProj)
-            # View
-            self.btnX = QtWidgets.QPushButton()
-            self.btnX.setText('View X')
-            self.btnX.clicked.connect(self.btnX_clicked)
-            btnVLyt.addWidget(self.btnX)
-            self.btnY = QtWidgets.QPushButton()
-            self.btnY.setText('View Y')
-            self.btnY.clicked.connect(self.btnY_clicked)
-            btnVLyt.addWidget(self.btnY)
-            self.btnZ = QtWidgets.QPushButton()
-            self.btnZ.setText('View Z')
-            self.btnZ.clicked.connect(self.btnZ_clicked)
-            btnVLyt.addWidget(self.btnZ)
-            self.btnP = QtWidgets.QPushButton()
-            self.btnP.setText('View P')
-            self.btnP.clicked.connect(self.btnP_clicked)
-            btnVLyt.addWidget(self.btnP)
+            grpProjLyt = QtWidgets.QVBoxLayout()
+            self.rbtnIsomtrcroj = QtWidgets.QRadioButton("Perspective")
+            self.rbtnIsomtrcroj.setChecked(True)
+            self.rbtnIsomtrcroj.projection = "Perspective"
+            self.rbtnIsomtrcroj.toggled.connect(self.rbtnIsomtrcroj_clicked)
+            grpProjLyt.addWidget(self.rbtnIsomtrcroj)
+            self.rbtnIsomtrcroj = QtWidgets.QRadioButton("Parallel")
+            self.rbtnIsomtrcroj.projection = "Parallel"
+            self.rbtnIsomtrcroj.toggled.connect(self.rbtnIsomtrcroj_clicked)
+            grpProjLyt.addWidget(self.rbtnIsomtrcroj)
+            grpProj = QtWidgets.QGroupBox("Projection")
+            grpProj.setLayout(grpProjLyt)
+            sdePnlLyt.addWidget(grpProj)
+            # Orthographic View
+            grpViewLyt = QtWidgets.QVBoxLayout()
+            self.btnYZ = QtWidgets.QPushButton()
+            self.btnYZ.setText('YZ / -YZ')
+            self.btnYZ.clicked.connect(self.btnYZ_clicked)
+            grpViewLyt.addWidget(self.btnYZ)
+            self.btnXZ = QtWidgets.QPushButton()
+            self.btnXZ.setText('XZ / -XZ')
+            self.btnXZ.clicked.connect(self.btnXZ_clicked)
+            grpViewLyt.addWidget(self.btnXZ)
+            self.btnXY = QtWidgets.QPushButton()
+            self.btnXY.setText('XY / -XY')
+            self.btnXY.clicked.connect(self.btnXY_clicked)
+            grpViewLyt.addWidget(self.btnXY)
+            self.btnIsomtrc = QtWidgets.QPushButton()
+            self.btnIsomtrc.setText('Isometric')
+            self.btnIsomtrc.clicked.connect(self.btnIsomtrc_clicked)
+            grpViewLyt.addWidget(self.btnIsomtrc)
+            grpView = QtWidgets.QGroupBox("Ortho View")
+            grpView.setLayout(grpViewLyt)
+            sdePnlLyt.addWidget(grpView)
+            # Others
             self.btnZUp = QtWidgets.QPushButton()
-            self.btnZUp.setText('Set Z up')
+            self.btnZUp.setText('Z Upright')
             self.btnZUp.clicked.connect(self.btnZUp_clicked)
-            btnVLyt.addWidget(self.btnZUp)
+            sdePnlLyt.addWidget(self.btnZUp)
             self.btnShowAll = QtWidgets.QPushButton()
             self.btnShowAll.setText('Show All')
             self.btnShowAll.clicked.connect(self.btnShowAll_clicked)
-            btnVLyt.addWidget(self.btnShowAll)
+            sdePnlLyt.addWidget(self.btnShowAll)
             # Camera tracking
-            frmTrkgVLyt = QtWidgets.QVBoxLayout()
-            frmTrkgVLyt.addWidget(QtWidgets.QLabel('Tracking'))
+            grpTrkgLyt = QtWidgets.QVBoxLayout()
             self.rbtnTrkg = QtWidgets.QRadioButton("None")
             self.rbtnTrkg.setChecked(True)
             self.rbtnTrkg.tracking = "None"
             self.rbtnTrkg.toggled.connect(self.rbtnTrkg_clicked)
-            frmTrkgVLyt.addWidget(self.rbtnTrkg)
+            grpTrkgLyt.addWidget(self.rbtnTrkg)
             self.rbtnTrkg = QtWidgets.QRadioButton("Tool")
             self.rbtnTrkg.tracking = "Tool"
             self.rbtnTrkg.toggled.connect(self.rbtnTrkg_clicked)
-            frmTrkgVLyt.addWidget(self.rbtnTrkg)
+            grpTrkgLyt.addWidget(self.rbtnTrkg)
             self.rbtnTrkg = QtWidgets.QRadioButton("Work")
             self.rbtnTrkg.tracking = "Work"
             self.rbtnTrkg.toggled.connect(self.rbtnTrkg_clicked)
-            frmTrkgVLyt.addWidget(self.rbtnTrkg)
-            frmTrkg = QtWidgets.QFrame()
-            frmTrkg.setFrameShape(QtWidgets.QFrame.Shape.Box)
-            frmTrkg.setLayout(frmTrkgVLyt)
-            btnVLyt.addWidget(frmTrkg)
-            btnVLyt.addStretch()
+            grpTrkgLyt.addWidget(self.rbtnTrkg)
+            grpTrkg = QtWidgets.QGroupBox("Tracking")
+            grpTrkg.setLayout(grpTrkgLyt)
+            sdePnlLyt.addWidget(grpTrkg)
+            sdePnlLyt.addStretch()
             # VTK Interactor (this is where the model is going to be)
             self.vtkInteractor = QVTKRenderWindowInteractor(self)
             # Main layout
             mainHLyt = QtWidgets.QHBoxLayout()
             mainHLyt.addWidget(self.vtkInteractor)
-            mainHLyt.addLayout(btnVLyt)
+            mainHLyt.addLayout(sdePnlLyt)
             mainHLyt.setStretchFactor(self.vtkInteractor,10)
-            mainHLyt.setStretchFactor(btnVLyt,1)
+            mainHLyt.setStretchFactor(sdePnlLyt,1)
             # Centralwidget
             centralwidget = QtWidgets.QWidget()
             centralwidget.setLayout(mainHLyt)
             self.setCentralWidget(centralwidget)
 
-    def btnParProj_clicked(self):
+    def btnIsomtrcarProj_clicked(self):
 
         camera.SetParallelProjection(not self.parProj)
         self.parProj = not self.parProj
 
-    def rbtnProj_clicked(self):
+    def rbtnIsomtrcroj_clicked(self):
         renderer = self.vtkInteractor.GetRenderWindow().GetRenderers().GetFirstRenderer()
         camera = renderer.GetActiveCamera()
-        self.rbtnProj = self.sender()
-        if self.rbtnProj.projection == "Perspective":
+        self.rbtnIsomtrcroj = self.sender()
+        if self.rbtnIsomtrcroj.projection == "Perspective":
             camera.SetParallelProjection(False)
-        elif self.rbtnProj.projection == "Parallel":
+        elif self.rbtnIsomtrcroj.projection == "Parallel":
             camera.SetParallelProjection(True)
 
-    def btnX_clicked(self):
-        self.set_orthogonal_view('x',(0,0,1))
+    def btnYZ_clicked(self):
+        self.set_ortho_view('x',(0,0,1))
 
-    def btnY_clicked(self):
-        self.set_orthogonal_view('y',(0,0,1))
+    def btnXZ_clicked(self):
+        self.set_ortho_view('y',(0,0,1))
 
-    def btnZ_clicked(self):
-        self.set_orthogonal_view('z',(0,1,0))
+    def btnXY_clicked(self):
+        self.set_ortho_view('z',(0,1,0))
 
-    def set_orthogonal_view(self,axis,up):
+    def set_ortho_view(self,axis,up):
         renderer = self.vtkInteractor.GetRenderWindow().GetRenderers().GetFirstRenderer()
         camera = renderer.GetActiveCamera()
         camera.SetViewUp(*up)
@@ -1092,18 +1093,29 @@ class MainWindow(Qt.QMainWindow):
         camera.SetFocalPoint(0,0,0)
         renderer.ResetCamera()
 
-    def btnP_clicked(self):
+    def btnIsomtrc_clicked(self):
         renderer = self.vtkInteractor.GetRenderWindow().GetRenderers().GetFirstRenderer()
         camera = renderer.GetActiveCamera()
-        self.btnX_clicked()
-        camera.Azimuth(-50)
+        camera.SetViewUp(0,0,1)
+        camera.SetPosition(10,0,0)
+        camera.SetFocalPoint(0,0,0)
+        if self.view[0] == 'p':
+            next_idx = int(self.view[1])+1
+            camera.Azimuth(-45 + next_idx*90)
+            self.view = 'p'+str(next_idx)
+        else:
+            camera.Azimuth(-45)
+            self.view = 'p0'
+        # exact isometric view creates flat lighting so we don't use 35.264° elevation
         camera.Elevation(30)
-        self.view = 'p'
+        renderer.ResetCamera()
 
     def btnZUp_clicked(self):
         renderer = self.vtkInteractor.GetRenderWindow().GetRenderers().GetFirstRenderer()
         camera = renderer.GetActiveCamera()
-        camera.SetViewUp(0,0,1)
+        # a renderer warning is produced if the current viewplane is already parallel to XY
+        if not (camera.GetViewUp() == (0,0,1) or camera.GetViewUp() == (0,1,0)):
+            camera.SetViewUp(0,0,1)
 
     def btnShowAll_clicked(self):
         renderer = self.vtkInteractor.GetRenderWindow().GetRenderers().GetFirstRenderer()
@@ -1228,7 +1240,7 @@ def main(options, comp,
     # Put everything in the Qt window
     mainWindow.vtkInteractor.GetRenderWindow().AddRenderer(renderer)
     # Set initial view
-    mainWindow.btnP_clicked()
+    mainWindow.btnIsomtrc_clicked()
     # Set interactor style and initialize
     interactor = mainWindow.vtkInteractor.GetRenderWindow().GetInteractor()
     orientation_marker.SetInteractor(interactor)
