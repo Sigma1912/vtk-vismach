@@ -52,9 +52,9 @@ c.newpin('work_offset_z', hal.HAL_FLOAT, hal.HAL_IN)
 # selected kinematics
 c.newpin('kinstype_select', hal.HAL_FLOAT, hal.HAL_IN)
 # work piece show/hide
-c.newpin('hide_work_piece_1', hal.HAL_BIT, hal.HAL_IN)
+c.newpin('hide_work_piece', hal.HAL_BIT, hal.HAL_IN)
 # spindle body show/hide
-c.newpin('hide_spindle_body', hal.HAL_BIT, hal.HAL_IN)
+c.newpin('hide_machine_model', hal.HAL_BIT, hal.HAL_IN)
 # work piece show/hide
 c.newpin('hide_somethingelse', hal.HAL_BIT, hal.HAL_IN)
 # scale coordinate system indicators
@@ -150,7 +150,8 @@ EGO_B = Color([EGO_B],0.7,0.7,0,1)
 # rotate the nutation joint to the nutation angle, 90° should have the nutation axis in the horizontal plane
 EGO_B = Rotate([EGO_B],-90,-1,0,0)
 EGO_B = Rotate([EGO_B],c,'nutation_angle',-1,0,0)
-
+# Make it hidable
+EGO_B = Scale([EGO_B],c,True,'hide_machine_model',0,1)
 spindle_assembly = Collection([
                    tool,
                    EGO_B,
@@ -164,6 +165,8 @@ spindle_assembly = Nutate([spindle_assembly],hal,'joint.3.pos-fb',0,-1,0)
 # Z carriage
 EGO_Z = Color([EGO_Z],1,0.5,0,1)
 EGO_Z = Translate([EGO_Z], 0, 0, -759.5)
+# Make it hidable
+EGO_Z = Scale([EGO_Z],c,True,'hide_machine_model',0,1)
 spindle_z = Collection([
              spindle_assembly,
              EGO_Z
@@ -176,6 +179,8 @@ spindle_z = Translate([spindle_z],hal,0,0,'joint.2.pos-fb')
 spindle_z = Translate([spindle_z], 0, 0, machine_zero_z)
 # x carriage
 EGO_X = Color([EGO_X],0.6,0.8,0.3,1)
+# Make it hidable
+EGO_X = Scale([EGO_X],c,True,'hide_machine_model',0,1)
 spindle_xz = Collection([
              spindle_z,
              EGO_X
@@ -227,9 +232,11 @@ work_plane = Scale([work_plane],c,1,'twp_defined',1,0)
 work_piece = BoxCentered(600,600,600)
 work_piece = Translate([work_piece],0,0,300)
 # Make the work piece hidable
-work_piece = Scale([work_piece],c,True,'hide_work_piece_1',0,1)
+work_piece = Scale([work_piece],c,True,'hide_work_piece',0,1)
 # Create rotary table
 EGO_C = Color([EGO_C],0.1,0.7,0.9,1)
+# Make it hidable
+EGO_C = Scale([EGO_C],c,True,'hide_machine_model',0,1)
 rotary_table_c = Collection([
                  work_piece,
                  EGO_C,
@@ -241,6 +248,8 @@ rotary_table_c = Collection([
 rotary_table_c = Rotate([rotary_table_c],hal,'joint.4.pos-fb',0,0,-1)
 # y-carriage that carries the rotary table
 EGO_Y = Color([EGO_Y],0.2,0.2,0.2,1)
+# Make it hidable
+EGO_Y = Scale([EGO_Y],c,True,'hide_machine_model',0,1)
 table = Collection([
         rotary_table_c,
         EGO_Y
@@ -254,7 +263,8 @@ table = Translate([table], 0, -machine_zero_y, 0)
 
 # Create machine base
 base = Color([EGO_BC],0.3,0.3,0.3,1)
-
+# Make it hidable
+base = Scale([base],c,True,'hide_machine_model',0,1)
 arrow = ArrowOriented(c,0,0,0,'twp_ox_world','twp_oy_world','twp_oz_world',20)
 arrow = Translate([arrow], machine_zero_x, 0, machine_zero_z)
 
