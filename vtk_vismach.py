@@ -942,16 +942,21 @@ class Hud(vtk.vtkActor2D):
             for c in self.hud_lines:
                 text = c[0]
                 comp = c[1]
-                pin  = c[2]
+                pins = c[2]
                 tags = c[3]
+                if pins and not isinstance(pins, list):
+                    pins = [pins]
                 if not isinstance(tags, list):
                     tags = [tags]
                 if any(tag in tags for tag in show_list):
-                    if comp == None and pin == None: # txt
+                    if comp == None and pins == None: # txt
                         strs += [text]
-                    else: # pin
-                        var = hal.get_value(pin) if isinstance(comp,type(hal)) else comp[pin]
-                        strs += [text.format(var)]
+                    elif pins: # pins
+                        values = []
+                        for pin in pins:
+                            val = hal.get_value(pin) if isinstance(comp,type(hal)) else comp[pin]
+                            values.append(val)
+                        strs += [text.format(*tuple(values))]
         combined_string = ''
         for string in strs:
             combined_string += (string + '\n')
