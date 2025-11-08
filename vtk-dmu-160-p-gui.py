@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from vtk_vismach import *
+from vtkvismach.vtkvismach import *
 import hal
 from math import sin, cos, radians, degrees
 import sys
@@ -184,6 +184,8 @@ spindle_xz = Collection([
 spindle_xz = Translate([spindle_xz],hal,'joint.0.pos-fb',0,0)
 # move spindle_xz to x-home position
 spindle_xz = Translate([spindle_xz], machine_zero_x, 0, 0)
+# Make the spindle assembly hidable
+spindle_xz = Scale([spindle_xz],c,True,'hide_spindle_body',0,1)
 # end toolside
 
 # start workside
