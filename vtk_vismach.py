@@ -486,27 +486,25 @@ class Axes(ArgsBase, vtk.vtkAssembly):
             scale = self.coords()
             self.SetScale(scale,scale,scale)
 
+
+
 # Collcts a list of Actors and Assemblies into a new assembly
 class Collection(ArgsBase,vtk.vtkAssembly):
     pass
 
 
-# draw a grid defined by it's normal vector(zx,zy,zz) and x-direction vector(xx, xy, xz)
-# quad_size to define the half-width from the origin (ox,oy,oz)
+# draw a grid, use quad_size to define the half-width from the origin (ox,oy,oz)
 # As for why we are not using vtkRectilinearGrid() with wireframe for this see:
 # https://gitlab.kitware.com/vtk/vtk/-/issues/18453
-class GridFromNormalAndDirection(ArgsBase,vtk.vtkAssembly):
+class Grid(ArgsBase,vtk.vtkAssembly):
     def get_expected_args(self):
-        return ('(comp)','ox','oy','oz','xx','xy','xz','zx','zy','zz','quad_size','spacing')
+        return ('(comp)','quad_size','spacing')
 
     def create (self):
         self.SetUserTransform(vtk.vtkTransform())
-        ox, oy, oz, xx, xy, xz, zx, zy, zz, self.qs, self.sp = self.coords()
+        self.qs, self.sp = self.coords()
         self.r = 1
         self.grid()
-
-    def cross(self, a, b):
-        return [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]]
 
     def grid(self):
         qs = self.qs
@@ -545,31 +543,16 @@ class GridFromNormalAndDirection(ArgsBase,vtk.vtkAssembly):
     def update(self):
         if self.needs_updates or self.first_update:
             self.first_update = False
-            ox, oy, oz, xx, xy, xz, zx, zy, zz, self.qs, self.sp = self.coords()
-            vo = [ox, oy, oz]
-            vx = [xx, xy, xz]
-            vz = [zx, zy, zz]
-            # calculate the missing y vector
-            vy = [yx, yy, yz] = self.cross(vz,vx)
-            matrix = [[ xx, yx, zx, ox],
-                    [ xy, yy, zy, oy],
-                    [ xz, yz, zz, oz],
-                    [  0,  0,  0,       1]]
-            transform_matrix = vtk.vtkMatrix4x4()
-            for column in range (0,4):
-                for row in range (0,4):
-                    transform_matrix.SetElement(column, row, matrix[column][row])
-            self.SetUserMatrix(transform_matrix)
+            self.qs, self.sp = self.coords()
 
 
-# create a plane defined by it's normal vector(zx,zy,zz) and x-direction vector(xx, xy, xz)
-# quad_size to define the half-width from the origin (ox,oy,oz)
+# create a plane, use quad_size to define the half-width from the origin (ox,oy,oz)
 # This could also be used to draw a grid using .GetProperty().SetRepresentationToWireframe()
 # however there is a bug in vtk that shows black artefacts on some hardware:
 # https://gitlab.kitware.com/vtk/vtk/-/issues/18453
-class PlaneFromNormalAndDirection(ArgsBase,vtk.vtkActor):
+class Plane(ArgsBase,vtk.vtkActor):
     def get_expected_args(self):
-        return ('(comp)','ox','oy','oz','xx','xy','xz','zx','zy','zz','quad_size')
+        return ('(comp)','quad_size')
 
     def create (self):
         self.grid = vtk.vtkRectilinearGrid()
@@ -583,13 +566,10 @@ class PlaneFromNormalAndDirection(ArgsBase,vtk.vtkActor):
         self.SetUserTransform(vtk.vtkTransform())
         self.SetMapper(mapper)
 
-    def cross(self, a, b):
-        return [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]]
-
     def update(self):
         if self.needs_updates or self.first_update:
             self.first_update = False
-            ox, oy, oz, xx, xy, xz, zx, zy, zz, qs = self.coords()
+            qs = self.coords()
             sp = qs
             line_values = range(-qs,qs+sp,sp)
             dim = len(line_values)
@@ -599,21 +579,7 @@ class PlaneFromNormalAndDirection(ArgsBase,vtk.vtkActor):
                 self.yArray.InsertNextValue(line)
             self.grid.SetXCoordinates(self.xArray)
             self.grid.SetYCoordinates(self.yArray)
-            # create transformation
-            vo = [ox, oy, oz]
-            vx = [xx, xy, xz]
-            vz = [zx, zy, zz]
-            # calculate the missing y vector
-            vy = [yx, yy, yz] = self.cross(vz,vx)
-            matrix = [[ xx, yx, zx, ox],
-                      [ xy, yy, zy, oy],
-                      [ xz, yz, zz, oz],
-                      [  0,  0,  0,  1]]
-            transform_matrix = vtk.vtkMatrix4x4()
-            for column in range (0,4):
-                for row in range (0,4):
-                    transform_matrix.SetElement(column, row, matrix[column][row])
-            self.SetUserMatrix(transform_matrix)
+
 
 
 class Translate(ArgsBase,vtk.vtkAssembly):

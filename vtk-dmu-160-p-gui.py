@@ -212,7 +212,7 @@ twp_matrix = ('twp_ox', 'twp_oy', 'twp_oz',
               'twp_xx', 'twp_xy', 'twp_xz',
               'twp_zx', 'twp_zy', 'twp_zz')
 # TWP-Defined
-work_plane_defined = GridFromNormalAndDirection(c,*twp_matrix, 300, 10)
+work_plane_defined = MatrixTransform([Grid(300, 10)],c,*twp_matrix)
 wcs2twp_defined = ArrowOriented(c,0,0,0,'twp_ox','twp_oy','twp_oz',20)
 work_plane_coords_defined =  MatrixTransform([Axes(c,('scale_coords',300))],c,*twp_matrix)
 # create an indicator for the currently active G52/G92 offset for definded twp
@@ -226,7 +226,7 @@ work_plane_defined = Collection([work_plane_defined,
                                  ])
 work_plane_defined = Color([work_plane_defined],c,None,('twp_defined',0.2))
 # TWP-Active
-work_plane_active =  PlaneFromNormalAndDirection(c, *twp_matrix, 300)
+work_plane_active =  MatrixTransform([Plane(300)],c,*twp_matrix)
 # for twp-active = true, we show the plane in pink
 work_plane_active = Color([work_plane_active],c,1,0,1,0.3)
 wcs2twp_active = ArrowOriented(c,0,0,0,'twp_ox','twp_oy','twp_oz',20)
@@ -240,7 +240,7 @@ work_plane_active = Collection([work_plane_active,
                                 work_plane_coords_active,
                                 g92_twp_active
                                 ])
-work_plane_active = Color([work_plane_active],c,None,'twp_active')
+work_plane_active = Scale([work_plane_active],c,True,'twp_active',1,0)
 work_plane = Collection([work_plane_defined,
                          work_plane_active,
                          ])
