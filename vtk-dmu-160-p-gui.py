@@ -79,6 +79,10 @@ c.newpin('twp_zz', hal.HAL_FLOAT, hal.HAL_IN)
 c.newpin('twp_xx', hal.HAL_FLOAT, hal.HAL_IN)
 c.newpin('twp_xy', hal.HAL_FLOAT, hal.HAL_IN)
 c.newpin('twp_xz', hal.HAL_FLOAT, hal.HAL_IN)
+# currently applied g52/g92 offset
+c.newpin('g92_x', hal.HAL_FLOAT, hal.HAL_IN)
+c.newpin('g92_y', hal.HAL_FLOAT, hal.HAL_IN)
+c.newpin('g92_z', hal.HAL_FLOAT, hal.HAL_IN)
 # twp plane rotation, This is only used to show euler rotations of the plane in vismach
 # Currently not used anymore
 c.newpin('rot_order', hal.HAL_FLOAT, hal.HAL_IN)
@@ -123,8 +127,12 @@ machine_axes = Translate([machine_axes], machine_zero_x, 0, machine_zero_z)
 # start toolside
 # Create the tooltip tracker (tool control point)
 tooltip = Capture()
-# Create an indicator for the tool coordinates
-tool_axes = Axes(100)
+# Create an indicator for the tool coordinate system in IDENTITY mode
+tool_axes_idt = Scale([Axes(100)],hal,0,'motion.switchkins-type',1,0)
+tool_axes_idt = Translate([tool_axes_idt],hal,0,0,('motion.tooloffset.z',-1))
+tool_axes_idt = Translate([tool_axes_idt],c,0,('pivot_y',-1),('pivot_z',-1))
+# Create an indicator for the tool coordinate system in TCP and TWP modes
+tool_axes_tcp_twp = Scale([Axes(100)],hal,[1,2],'motion.switchkins-type',1,0)
 tool_shape = Collection([
                 CylinderZ(hal,'motion.tooloffset.z', ('halui.tool.diameter', 0.5)),
                 # this indicates the spindle nose when no tool-offset is active
@@ -137,7 +145,7 @@ tool_shape = Collection([
 #tool_stl = Translate([tool_stl],hal,0,0,'motion.tooloffset.z')
 tool = Collection([
                     tooltip,
-                    tool_axes,
+                    tool_axes_tcp_twp,
                     tool_shape,
 #                    tool_stl,
                     ])
@@ -169,7 +177,8 @@ EGO_Z = Translate([EGO_Z], 0, 0, -759.5)
 EGO_Z = Scale([EGO_Z],c,True,'hide_machine_model',0,1)
 spindle_z = Collection([
              spindle_assembly,
-             EGO_Z
+             EGO_Z,
+             tool_axes_idt
              ])
 # move by the values set for the pivot lengths so the vismach origin is in the center of the spindle nose
 spindle_z = Translate([spindle_z],c,0,'pivot_y','pivot_z')
@@ -194,7 +203,7 @@ spindle_xz = Translate([spindle_xz], machine_zero_x, 0, 0)
 # start workside
 # Create the work tracker (top center of the rotary table)
 work = Capture()
-# Create an indicator for the tool coordinates
+# Create an indicator for the work coordinates
 work_axes = Axes(100)
 # Create an indicator for the defined Tilted Work Plane (TWP)
 work_plane_defined=  GridFromNormalAndDirection(c,
@@ -223,11 +232,33 @@ work_plane_coords =  CoordsFromNormalAndDirection(c,
                 'twp_zx', 'twp_zy', 'twp_zz',
                 300
                 )
+# create an indicator for the twp offset
+wcs2twp = ArrowOriented(c,0,0,0,'twp_ox','twp_oy','twp_oz',20)
 work_plane = Collection([work_plane_defined,
                          work_plane_active,
-                         work_plane_coords])
+                         work_plane_coords,
+                         wcs2twp
+                         ])
+# move to the current wcs origin
+work_plane = Translate([work_plane], machine_zero_x,  machine_zero_y, machine_zero_z)
+work_plane = Translate([work_plane],c,'twp_ox_world','twp_oy_world','twp_oz_world')
 # make the work_plane hidable
 work_plane = Scale([work_plane],c,1,'twp_defined',1,0)
+# create an indicator for the currently active G52/G92 offset
+g92 = ArrowOriented(c,0,0,0,'g92_x','g92_y','g92_z',20)
+g92_twp = MatrixTransform([g92],c,
+                'twp_ox', 'twp_oy', 'twp_oz',
+                'twp_xx', 'twp_xy', 'twp_xz',
+                'twp_zx', 'twp_zy', 'twp_zz')
+# move to the current wcs origin
+g92_twp = Translate([g92_twp], machine_zero_x,  machine_zero_y, machine_zero_z)
+g92_twp = Translate([g92_twp],c,'twp_ox_world','twp_oy_world','twp_oz_world')
+g92_twp = Scale([g92_twp],c,1,'twp_defined',1,0)
+# move to the current wcs origin
+g92 = Translate([g92], machine_zero_x,  machine_zero_y, machine_zero_z)
+g92 = Translate([g92],c,'twp_ox_world','twp_oy_world','twp_oz_world')
+g92_idt = Scale([g92],hal,0,'motion.switchkins-type',1,0)
+g92_tcp = Scale([g92],hal,1,'motion.switchkins-type',1,0)
 # Create geometry for the work piece
 work_piece = BoxCentered(600,600,600)
 work_piece = Translate([work_piece],0,0,300)
@@ -242,6 +273,8 @@ rotary_table_c = Collection([
                  EGO_C,
                  work_plane,
                  work_axes,
+                 g92_twp,
+                 g92_tcp,
                  work
                  ])
 # Rotary table and work roatae with axis C'
@@ -252,7 +285,8 @@ EGO_Y = Color([EGO_Y],0.2,0.2,0.2,1)
 EGO_Y = Scale([EGO_Y],c,True,'hide_machine_model',0,1)
 table = Collection([
         rotary_table_c,
-        EGO_Y
+        EGO_Y,
+        g92_idt
         ])
 # Table moves with y axis
 #table = HalTranslate_orig([table],c,'axis_y',0,-1,0)
@@ -265,26 +299,25 @@ table = Translate([table], 0, -machine_zero_y, 0)
 base = Color([EGO_BC],0.3,0.3,0.3,1)
 # Make it hidable
 base = Scale([base],c,True,'hide_machine_model',0,1)
-arrow = ArrowOriented(c,0,0,0,'twp_ox_world','twp_oy_world','twp_oz_world',20)
-arrow = Translate([arrow], machine_zero_x, 0, machine_zero_z)
-
+wcs = ArrowOriented(c,0,0,0,'twp_ox_world','work_pos_y','twp_oz_world',20)
+wcs = Translate([wcs], machine_zero_x, 0, machine_zero_z)
 model = Collection([
         machine_axes,
         spindle_xz,
         table,
         base,
-        #arrow,
+        wcs,
         #CylinderX(hal,'joint.0.pos-fb',50),
         #Box(hal,'joint.1.pos-fb',0,0,100,100,-100),
         #Sphere(0,0,0,5),
         #Line(hal,('joint.1.pos-fb',-1),100,100,-1000,-1000,1000,2),
-        #rrowOriented(hal,0,0,0,'vismach.work_pos_x','vismach.work_pos_y','vismach.work_pos_z',50),
+        #ArrowOriented(hal,0,0,0,'vismach.work_pos_x','vismach.work_pos_y','vismach.work_pos_z',50),
         #ArrowOriented(c,'tool_pos_x','tool_pos_y','tool_pos_z','work_pos_x','work_pos_y','work_pos_z',50),
         #CylinderOriented(hal,'joint.1.pos-fb',100,100,-1000,-1000,1000,50)
         ])
 
 #hud
-myhud = Hud(color='mint') # This will always be displayed
+myhud = Hud(color='mint',opacity=0.4) # This will always be displayed
 myhud.add_txt('DMU-160-P')
 myhud.add_txt('---------')
 myhud.add_txt('')
@@ -292,22 +325,25 @@ myhud.add_txt('Kinematic Mode: IDENTITY',0)
 myhud.add_txt('Kinematic Mode: TCP',1)
 myhud.add_txt('Kinematic Mode: TOOL',2)
 myhud.add_txt('')
-myhud.add_txt('TWP-Orientation')
-myhud.add_pin('Xx: {:8.3f} Zx: {:8.3f}',c,['twp_xx','twp_zx'])
-myhud.add_pin('Xy: {:8.3f} Zy: {:8.3f}',c,['twp_xy','twp_zy'])
-myhud.add_pin('Xz: {:8.3f} Zz: {:8.3f}',c,['twp_xz','twp_zz'])
+myhud.add_txt('TWP-Orientation:')
+myhud.add_txt('   X             Z')
+myhud.add_pin('{:6.3f}        {:6.3f}',c,['twp_xx','twp_zx'])
+myhud.add_pin('{:6.3f}        {:6.3f}',c,['twp_xy','twp_zy'])
+myhud.add_pin('{:6.3f}        {:6.3f}',c,['twp_xz','twp_zz'])
 myhud.show_tag_eq_pin_offs(hal,'motion.switchkins-type')
 
-myhud2 = Hud(c,'kinstype_select',2,'tomato', 0.4) # This is displayed when kintype is 2
+#myhud2 = Hud(c,'kinstype_select',2,'mint', 1) # This is displayed when kintype is 2
+myhud2 = Hud(color='yellow',opacity=0.4) # This will always be displayed
 myhud2.add_txt('')
 myhud2.add_txt('')
 myhud2.add_txt('')
 myhud2.add_txt('')
 myhud2.add_txt('')
 myhud2.add_txt('')
-myhud2.add_pin('    {:8.3f}     {:8.3f}',c,['twp_xx','twp_zx'])
-myhud2.add_pin('    {:8.3f}     {:8.3f}',c,['twp_xy','twp_zy'])
-myhud2.add_pin('    {:8.3f}     {:8.3f}',c,['twp_xz','twp_zz'])
+myhud2.add_txt('')
+myhud2.add_pin('{:6.3f}        {:6.3f}',c,['twp_xx','twp_zx'])
+myhud2.add_pin('{:6.3f}        {:6.3f}',c,['twp_xy','twp_zy'])
+myhud2.add_pin('{:6.3f}        {:6.3f}',c,['twp_xz','twp_zz'])
 myhud2.extra_text_enable = True
 #/hud
 

@@ -770,6 +770,36 @@ class Scale(ArgsBase,vtk.vtkAssembly):
                 self.SetScale(s_f,s_f,s_f)
 
 
+# creates a transformaation matrix from given X and Z orientation and a translation vector
+# input parts will first be rotated and then translated
+class MatrixTransform(ArgsBase,vtk.vtkAssembly):
+    def get_expected_args(self):
+        return ('[parts]','(comp)','ox','oy','oz','xx','xy','xz','zx','zy','zz')
+
+    def cross(self, a, b):
+        return [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]]
+
+    def update(self):
+        if self.needs_updates or self.first_update:
+            self.first_update = False
+            ox, oy, oz, xx, xy, xz, zx, zy, zz = self.coords()
+            # create transformation
+            vo = [ox, oy, oz]
+            vx = [xx, xy, xz]
+            vz = [zx, zy, zz]
+            # calculate the missing y vector
+            vy = [yx, yy, yz] = self.cross(vz,vx)
+            matrix = [[ xx, yx, zx, ox],
+                      [ xy, yy, zy, oy],
+                      [ xz, yz, zz, oz],
+                      [  0,  0,  0,  1]]
+            transform_matrix = vtk.vtkMatrix4x4()
+            for column in range (0,4):
+                for row in range (0,4):
+                    transform_matrix.SetElement(column, row, matrix[column][row])
+            self.SetUserMatrix(transform_matrix)
+
+
 # Draws a polyline showing the path of 'tooltip' with respect to 'work'
 class Plotter(vtk.vtkActor):
     def __init__(self, comp, work, tooltip, clear, color='magenta'):
@@ -1176,12 +1206,12 @@ def main(argv_options, comp,
         comp['tool_pos_y'] = tooltip.current_matrix.GetElement(1,3)
         comp['tool_pos_z'] = tooltip.current_matrix.GetElement(2,3)
         t2w = backplot.tool2work.GetMatrix()
-        r1=('{:8.3f} {:8.3f} {:8.3f} {:8.3f}'.format(t2w.GetElement(0,0), t2w.GetElement(0,1), t2w.GetElement(0,2), t2w.GetElement(0,3)))
-        r2=('{:8.3f} {:8.3f} {:8.3f} {:8.3f}'.format(t2w.GetElement(1,0), t2w.GetElement(1,1), t2w.GetElement(1,2), t2w.GetElement(1,3)))
-        r3=('{:8.3f} {:8.3f} {:8.3f} {:8.3f}'.format(t2w.GetElement(2,0), t2w.GetElement(2,1), t2w.GetElement(2,2), t2w.GetElement(2,3)))
+        r1=('{:6.3f} {:6.3f} {:6.3f} {:9.3f}'.format(t2w.GetElement(0,0), t2w.GetElement(0,1), t2w.GetElement(0,2), t2w.GetElement(0,3)))
+        r2=('{:6.3f} {:6.3f} {:6.3f} {:9.3f}'.format(t2w.GetElement(1,0), t2w.GetElement(1,1), t2w.GetElement(1,2), t2w.GetElement(1,3)))
+        r3=('{:6.3f} {:6.3f} {:6.3f} {:9.3f}'.format(t2w.GetElement(2,0), t2w.GetElement(2,1), t2w.GetElement(2,2), t2w.GetElement(2,3)))
         # Update HUD
         for hud in huds:
-            hud.extra_text = '\ntool2work Matrix:'+'\n'+r1+'\n'+r2+'\n'+r3
+            hud.extra_text = '\nTool -> Work Transformation:\n'+'   X      Y      Z      Pos\n'+r1+'\n'+r2+'\n'+r3
             hud.update()
         # Update camera tracking
         if mainWindow.trackTool or  mainWindow.trackWork:
