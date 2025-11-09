@@ -79,7 +79,7 @@ class ArgsBase(object):
                 return v
             return s*hal.get_value(v)
         else:
-            if isinstance(v,str): # eg a filename from 'ReadPolyData()'
+            if isinstance(v,str) or v == None: # eg a string filename from 'ReadPolyData()' or None for color
                 return v
             return s*v
 
@@ -672,17 +672,25 @@ class Color(ArgsBase,vtk.vtkAssembly):
         if self.needs_updates or self.first_update:
             self.first_update = False
             args = self.coords() # can be (r,g,b,a) or (color,a)
+            opacity_only = False
             if isinstance(args[0],str):  # ie (color, a) has been passed
                 color, opacity = args
+            elif args[0] == None: # None instead of color string passed
+                opacity = args[1]
+                opacity_only = True
             else:
                 color = (args[0],args[1],args[2])
                 opacity = args[3]
             for part in self.parts_to_update:
-                if not isinstance(color, tuple):
-                    colors = vtk.vtkNamedColors()
-                    part.GetProperty().SetColor(colors.GetColor3d(color))
-                else:
-                    part.GetProperty().SetColor(color)
+                if not opacity_only:
+                    if not isinstance(color, tuple):
+                        try:
+                            colors = vtk.vtkNamedColors()
+                            part.GetProperty().SetColor(colors.GetColor3d(color))
+                        except:
+                            pass
+                    else:
+                        part.GetProperty().SetColor(color)
                 part.GetProperty().SetOpacity(opacity)
 
 

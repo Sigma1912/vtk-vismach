@@ -205,35 +205,46 @@ spindle_xz = Translate([spindle_xz], machine_zero_x, 0, 0)
 work = Capture()
 # Create an indicator for the work coordinates
 work_axes = Axes(100)
+# TWP Matrix
+twp_matrix = ('twp_ox', 'twp_oy', 'twp_oz',
+              'twp_xx', 'twp_xy', 'twp_xz',
+              'twp_zx', 'twp_zy', 'twp_zz')
 # Create an indicator for the defined Tilted Work Plane (TWP)
-work_plane_defined=  GridFromNormalAndDirection(c,
-                'twp_ox', 'twp_oy', 'twp_oz',
-                'twp_xx', 'twp_xy', 'twp_xz',
-                'twp_zx', 'twp_zy', 'twp_zz',
-                300, 10
-                )
+work_plane_defined=  GridFromNormalAndDirection(c,*twp_matrix, 300, 10)
 # for twp-defined = true, we show the plane in gray
-work_plane_defined = Color([work_plane_defined],0.7,0.7,0.7,0.3)
-work_plane_defined = Scale([work_plane_defined],c,1,'twp_defined',1,0)
+work_plane_defined = Color([work_plane_defined],c,0.7,0.7,0.7,('twp_defined',0.2))
+wcs2twp_defined = ArrowOriented(c,0,0,0,'twp_ox','twp_oy','twp_oz',20)
+wcs2twp_defined = Color([wcs2twp_defined],c,None,('twp_defined',0.2))
+# create an indicator for the currently active G52/G92 offset for definded twp
+g92_twp_defined = MatrixTransform([ArrowOriented(c,0,0,0,'g92_x','g92_y','g92_z',20)],c,*twp_matrix)
+g92_twp_defined = Translate([g92_twp_defined], machine_zero_x,  machine_zero_y, machine_zero_z)
+g92_twp_defined = Translate([g92_twp_defined],c,'twp_ox_world','twp_oy_world','twp_oz_world')
+g92_twp_defined = Color([g92_twp_defined],c,None,('twp_defined',0.2))
+work_plane_defined = Collection([work_plane_defined,
+                                 wcs2twp_defined,
+                                 g92_twp_defined
+                                 ])
 # Create an indicator for the active Tilted Work Plane (TWP), same as active but with different color
-work_plane_active =  PlaneFromNormalAndDirection(c,
-                'twp_ox', 'twp_oy', 'twp_oz',
-                'twp_xx', 'twp_xy', 'twp_xz',
-                'twp_zx', 'twp_zy', 'twp_zz',
-                300
-                )
+work_plane_active =  PlaneFromNormalAndDirection(c, *twp_matrix, 300)
 # for twp-active = true, we show the plane in pink
-work_plane_active = Color([work_plane_active],1,0,1,0.3)
-work_plane_active = Scale([work_plane_active],c,1,'twp_active',1,0)
+work_plane_active = Color([work_plane_active],c,1,0,1,('twp_active',0.3))
+wcs2twp_active = ArrowOriented(c,0,0,0,'twp_ox','twp_oy','twp_oz',20)
+wcs2twp_active = Color([wcs2twp_active],c,None,'twp_active')
+# create an indicator for the currently active G52/G92 offset in active twp mode
+g92_twp_active = MatrixTransform([ArrowOriented(c,0,0,0,'g92_x','g92_y','g92_z',20)],c,*twp_matrix)
+g92_twp_active = Translate([g92_twp_active], machine_zero_x,  machine_zero_y, machine_zero_z)
+g92_twp_active = Translate([g92_twp_active],c,'twp_ox_world','twp_oy_world','twp_oz_world')
+g92_twp_active = Color([g92_twp_active],c,None,'twp_active')
+work_plane_active = Collection([work_plane_active,
+                                wcs2twp_active,
+                                g92_twp_active
+                                ])
 # Create a coordinate system for the twp-plane
-work_plane_coords =  CoordsFromNormalAndDirection(c,
-                'twp_ox', 'twp_oy', 'twp_oz',
-                'twp_xx', 'twp_xy', 'twp_xz',
-                'twp_zx', 'twp_zy', 'twp_zz',
-                300
-                )
+work_plane_coords =  CoordsFromNormalAndDirection(c,*twp_matrix, 300)
 # create an indicator for the twp offset
 wcs2twp = ArrowOriented(c,0,0,0,'twp_ox','twp_oy','twp_oz',20)
+#wcs2twp = Color([wcs2twp],c,None,('twp_defined',0.2))
+wcs2twp = Color([wcs2twp],c,None,('twp_active',1))
 work_plane = Collection([work_plane_defined,
                          work_plane_active,
                          work_plane_coords,
@@ -242,19 +253,8 @@ work_plane = Collection([work_plane_defined,
 # move to the current wcs origin
 work_plane = Translate([work_plane], machine_zero_x,  machine_zero_y, machine_zero_z)
 work_plane = Translate([work_plane],c,'twp_ox_world','twp_oy_world','twp_oz_world')
-# make the work_plane hidable
-work_plane = Scale([work_plane],c,1,'twp_defined',1,0)
-# create an indicator for the currently active G52/G92 offset
+# create an indicator for the currently active G52/G92 offset in IDENTITY and TCP modes
 g92 = ArrowOriented(c,0,0,0,'g92_x','g92_y','g92_z',20)
-g92_twp = MatrixTransform([g92],c,
-                'twp_ox', 'twp_oy', 'twp_oz',
-                'twp_xx', 'twp_xy', 'twp_xz',
-                'twp_zx', 'twp_zy', 'twp_zz')
-# move to the current wcs origin
-g92_twp = Translate([g92_twp], machine_zero_x,  machine_zero_y, machine_zero_z)
-g92_twp = Translate([g92_twp],c,'twp_ox_world','twp_oy_world','twp_oz_world')
-g92_twp = Scale([g92_twp],c,1,'twp_defined',1,0)
-# move to the current wcs origin
 g92 = Translate([g92], machine_zero_x,  machine_zero_y, machine_zero_z)
 g92 = Translate([g92],c,'twp_ox_world','twp_oy_world','twp_oz_world')
 g92_idt = Scale([g92],hal,0,'motion.switchkins-type',1,0)
@@ -273,7 +273,6 @@ rotary_table_c = Collection([
                  EGO_C,
                  work_plane,
                  work_axes,
-                 g92_twp,
                  g92_tcp,
                  work
                  ])
