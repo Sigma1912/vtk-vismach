@@ -89,13 +89,6 @@ c.newpin('rot_order', hal.HAL_FLOAT, hal.HAL_IN)
 c.newpin('rot_th1', hal.HAL_FLOAT, hal.HAL_IN)
 c.newpin('rot_th2', hal.HAL_FLOAT, hal.HAL_IN)
 c.newpin('rot_th3', hal.HAL_FLOAT, hal.HAL_IN)
-# these pins are written to from main()
-c.newpin('work_pos_x',hal.HAL_FLOAT,hal.HAL_OUT)
-c.newpin('work_pos_y',hal.HAL_FLOAT,hal.HAL_OUT)
-c.newpin('work_pos_z',hal.HAL_FLOAT,hal.HAL_OUT)
-c.newpin('tool_pos_x',hal.HAL_FLOAT,hal.HAL_OUT)
-c.newpin('tool_pos_y',hal.HAL_FLOAT,hal.HAL_OUT)
-c.newpin('tool_pos_z',hal.HAL_FLOAT,hal.HAL_OUT)
 c.ready()
 
 
@@ -115,29 +108,39 @@ class Nutate(Collection):
         self.SetUserTransform(self.transformation)
 
 
+# Creates a 3d arrow pointing from (xs,ys,zs) to (xe,ye,ze)
+# where 'ye' depends on two hal values (ye = 'twp_oy_world' - 'joint.1.pos-fb')
+class CustomArrowOriented(ArrowOriented):
+    def coords(self):
+        xs, ys, zs, xe, ye, ze, radius = super().coords()
+        ye -= hal.get_value('joint.1.pos-fb')
+        return xs, ys, zs, xe, ye, ze, radius
+
+
 # Machine zero as measured from center surface of the rotary c table
 machine_zero_x = -1000
 machine_zero_y =  1000
 machine_zero_z =  1000
 
 # Create an indicator for the machine reference coordinates
-machine_axes = Axes(c,('scale_coords',200))
-machine_axes = Translate([machine_axes], machine_zero_x, 0, machine_zero_z)
+machine_coords = Axes(c,('scale_coords',200))
+machine_coords = Translate([machine_coords], machine_zero_x, 0, machine_zero_z)
 
 # start toolside
 # Create the tooltip tracker (tool control point)
 tooltip = Capture()
 # Create an indicator for the tool coordinate system in IDENTITY mode
-tool_axes_idt = Scale([Axes(100)],hal,0,'motion.switchkins-type',1,0)
-tool_axes_idt = Translate([tool_axes_idt],hal,0,0,('motion.tooloffset.z',-1))
-tool_axes_idt = Translate([tool_axes_idt],c,0,('pivot_y',-1),('pivot_z',-1))
+tool_coords_idt = Scale([Axes(100)],hal,0,'motion.switchkins-type',1,0)
+tool_coords_idt = Translate([tool_coords_idt],hal,0,0,('motion.tooloffset.z',-1))
+tool_coords_idt = Translate([tool_coords_idt],c,0,('pivot_y',-1),('pivot_z',-1))
 # Create an indicator for the tool coordinate system in TCP and TWP modes
-tool_axes_tcp_twp = Scale([Axes(100)],hal,[1,2],'motion.switchkins-type',1,0)
+tool_coords_tcp_twp = Scale([Axes(100)],hal,[1,2],'motion.switchkins-type',1,0)
 tool_shape = Collection([
                 CylinderZ(hal,'motion.tooloffset.z', ('halui.tool.diameter', 0.5)),
                 # this indicates the spindle nose when no tool-offset is active
                 CylinderZ(-0.1, 0),
                 ])
+tool_shape = Color([tool_shape],1,0,1,1)
 #tool_stl = ReadPolyData(hal,"halui.tool.number", path_tool_stl)
 #tool_stl = ReadPolyData(c,"tool_number", path_tool_stl)
 #tool_stl = Rotate([tool_stl],180,0,1,0)
@@ -145,14 +148,13 @@ tool_shape = Collection([
 #tool_stl = Translate([tool_stl],hal,0,0,'motion.tooloffset.z')
 tool = Collection([
                     tooltip,
-                    tool_axes_tcp_twp,
+                    tool_coords_tcp_twp,
                     tool_shape,
 #                    tool_stl,
                     ])
 tool = Rotate([tool],c,'virtual_rotation',0,0,1)
 tool = Translate([tool],hal,0,0,('motion.tooloffset.z',-1))
 tool = Translate([tool],c,0,('pivot_y',-1),('pivot_z',-1))
-tool = Color([tool],1,0,1,1)
 # create spindle head
 EGO_B = Color([EGO_B],0.7,0.7,0,1)
 # rotate the nutation joint to the nutation angle, 90° should have the nutation axis in the horizontal plane
@@ -178,7 +180,7 @@ EGO_Z = Scale([EGO_Z],c,True,'hide_machine_model',0,1)
 spindle_z = Collection([
              spindle_assembly,
              EGO_Z,
-             tool_axes_idt
+             tool_coords_idt
              ])
 # move by the values set for the pivot lengths so the vismach origin is in the center of the spindle nose
 spindle_z = Translate([spindle_z],c,0,'pivot_y','pivot_z')
@@ -209,46 +211,38 @@ work_axes = Axes(100)
 twp_matrix = ('twp_ox', 'twp_oy', 'twp_oz',
               'twp_xx', 'twp_xy', 'twp_xz',
               'twp_zx', 'twp_zy', 'twp_zz')
-# Create an indicator for the defined Tilted Work Plane (TWP)
-work_plane_defined=  GridFromNormalAndDirection(c,*twp_matrix, 300, 10)
-# for twp-defined = true, we show the plane in gray
-work_plane_defined = Color([work_plane_defined],c,0.7,0.7,0.7,('twp_defined',0.2))
+# TWP-Defined
+work_plane_defined = GridFromNormalAndDirection(c,*twp_matrix, 300, 10)
 wcs2twp_defined = ArrowOriented(c,0,0,0,'twp_ox','twp_oy','twp_oz',20)
-wcs2twp_defined = Color([wcs2twp_defined],c,None,('twp_defined',0.2))
+work_plane_coords_defined =  MatrixTransform([Axes(c,('scale_coords',300))],c,*twp_matrix)
 # create an indicator for the currently active G52/G92 offset for definded twp
 g92_twp_defined = MatrixTransform([ArrowOriented(c,0,0,0,'g92_x','g92_y','g92_z',20)],c,*twp_matrix)
 g92_twp_defined = Translate([g92_twp_defined], machine_zero_x,  machine_zero_y, machine_zero_z)
 g92_twp_defined = Translate([g92_twp_defined],c,'twp_ox_world','twp_oy_world','twp_oz_world')
-g92_twp_defined = Color([g92_twp_defined],c,None,('twp_defined',0.2))
 work_plane_defined = Collection([work_plane_defined,
                                  wcs2twp_defined,
+                                 work_plane_coords_defined,
                                  g92_twp_defined
                                  ])
-# Create an indicator for the active Tilted Work Plane (TWP), same as active but with different color
+work_plane_defined = Color([work_plane_defined],c,None,('twp_defined',0.2))
+# TWP-Active
 work_plane_active =  PlaneFromNormalAndDirection(c, *twp_matrix, 300)
 # for twp-active = true, we show the plane in pink
-work_plane_active = Color([work_plane_active],c,1,0,1,('twp_active',0.3))
+work_plane_active = Color([work_plane_active],c,1,0,1,0.3)
 wcs2twp_active = ArrowOriented(c,0,0,0,'twp_ox','twp_oy','twp_oz',20)
-wcs2twp_active = Color([wcs2twp_active],c,None,'twp_active')
+work_plane_coords_active =  MatrixTransform([Axes(c,('scale_coords',300))],c,*twp_matrix)
 # create an indicator for the currently active G52/G92 offset in active twp mode
 g92_twp_active = MatrixTransform([ArrowOriented(c,0,0,0,'g92_x','g92_y','g92_z',20)],c,*twp_matrix)
 g92_twp_active = Translate([g92_twp_active], machine_zero_x,  machine_zero_y, machine_zero_z)
 g92_twp_active = Translate([g92_twp_active],c,'twp_ox_world','twp_oy_world','twp_oz_world')
-g92_twp_active = Color([g92_twp_active],c,None,'twp_active')
 work_plane_active = Collection([work_plane_active,
                                 wcs2twp_active,
+                                work_plane_coords_active,
                                 g92_twp_active
                                 ])
-# Create a coordinate system for the twp-plane
-work_plane_coords =  CoordsFromNormalAndDirection(c,*twp_matrix, 300)
-# create an indicator for the twp offset
-wcs2twp = ArrowOriented(c,0,0,0,'twp_ox','twp_oy','twp_oz',20)
-#wcs2twp = Color([wcs2twp],c,None,('twp_defined',0.2))
-wcs2twp = Color([wcs2twp],c,None,('twp_active',1))
+work_plane_active = Color([work_plane_active],c,None,'twp_active')
 work_plane = Collection([work_plane_defined,
                          work_plane_active,
-                         work_plane_coords,
-                         wcs2twp
                          ])
 # move to the current wcs origin
 work_plane = Translate([work_plane], machine_zero_x,  machine_zero_y, machine_zero_z)
@@ -298,21 +292,15 @@ table = Translate([table], 0, -machine_zero_y, 0)
 base = Color([EGO_BC],0.3,0.3,0.3,1)
 # Make it hidable
 base = Scale([base],c,True,'hide_machine_model',0,1)
-wcs = ArrowOriented(c,0,0,0,'twp_ox_world','work_pos_y','twp_oz_world',20)
+#wcs = ArrowOriented(c,0,0,0,'twp_ox_world','work_pos_y','twp_oz_world',20)
+wcs = CustomArrowOriented(c,0,0,0,'twp_ox_world','twp_oy_world','twp_oz_world',20)
 wcs = Translate([wcs], machine_zero_x, 0, machine_zero_z)
 model = Collection([
-        machine_axes,
+        machine_coords,
         spindle_xz,
         table,
         base,
-        wcs,
-        #CylinderX(hal,'joint.0.pos-fb',50),
-        #Box(hal,'joint.1.pos-fb',0,0,100,100,-100),
-        #Sphere(0,0,0,5),
-        #Line(hal,('joint.1.pos-fb',-1),100,100,-1000,-1000,1000,2),
-        #ArrowOriented(hal,0,0,0,'vismach.work_pos_x','vismach.work_pos_y','vismach.work_pos_z',50),
-        #ArrowOriented(c,'tool_pos_x','tool_pos_y','tool_pos_z','work_pos_x','work_pos_y','work_pos_z',50),
-        #CylinderOriented(hal,'joint.1.pos-fb',100,100,-1000,-1000,1000,50)
+        wcs
         ])
 
 #hud

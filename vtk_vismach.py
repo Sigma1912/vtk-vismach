@@ -427,7 +427,7 @@ class ReadPolyData(ArgsBase, vtk.vtkActor):
 
 
 # Create a trihedron indicating coordinate orientation
-class Axes(ArgsBase,vtk.vtkAxesActor):
+class Axes_orig(ArgsBase,vtk.vtkAxesActor):
     def get_expected_args(self):
         return ('(comp)','scale')
 
@@ -445,47 +445,46 @@ class Axes(ArgsBase,vtk.vtkAxesActor):
             self.SetScale(scale,scale,scale)
 
 
-# draw a coordinate system defined by it's normal vector(zx,zy,zz) and x-direction vector(xx, xy, xz)
-# optional r to define the thickness of the cylinders
-class CoordsFromNormalAndDirection(ArgsBase,vtk.vtkAxesActor):
-    def get_expected_args(self):
-        return ('(comp)','ox','oy','oz','xx','xy','xz','zx','zy','zz','scale')
+class Axes(ArgsBase, vtk.vtkAssembly):
+    class Arrow(vtk.vtkActor):
+        def __init__(self, axis, length, radius, resolution):
+            # Create arrow (arrows are created along the X axis by default)
+            arrowSource = vtk.vtkArrowSource()
+            arrowSource.SetTipResolution(resolution)
+            arrowSource.SetShaftRadius(radius)
+            arrowSource.SetTipRadius(radius*1.6)
+            if length < 0.1: length = 1
+            arrowSource.SetTipLength(radius*8/length)
+            self.mapper = vtk.vtkPolyDataMapper()
+            self.mapper.SetInputConnection(arrowSource.GetOutputPort())
+            self.SetMapper(self.mapper)
+            transform = vtk.vtkTransform()
+            colors = vtk.vtkNamedColors()
+            color = 'red'
+            if axis == 'y':
+                transform.RotateZ(90)
+                color = 'green'
+            elif axis == 'z':
+                transform.RotateY(-90)
+                color = 'blue'
+            transform.Scale(length, 1.0, 1.0)  # scale along the height vector
+            self.SetUserTransform(transform)
+            self.GetProperty().SetColor(colors.GetColor3d(color))
 
-    def cross(self, a, b):
-        return [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]]
+    def get_expected_args(self):
+        return ('(comp)','scale')
 
     def create(self):
-        ox, oy, oz, xx, xy, xz, zx, zy, zz, self.scale_factor = self.coords()
-        radius_factor = 0.5
         self.SetUserTransform(vtk.vtkTransform())
-        self.SetShaftTypeToCylinder()
-        self.SetCylinderRadius(radius_factor * self.GetCylinderRadius())
-        self.SetConeRadius(radius_factor * self.GetConeRadius())
-        self.SetScale(self.scale_factor, self.scale_factor, self.scale_factor)
-        self.SetUserTransform(vtk.vtkTransform())
+        for axis in ('x','y','z'):
+            arrow = self.Arrow(axis, 1, 0.025 , 10)
+            self.AddPart(arrow)
 
     def update(self):
         if self.needs_updates or self.first_update:
             self.first_update = False
-            ox, oy, oz, xx, xy, xz, zx, zy, zz, s = self.coords()
-            vo = [ox, oy, oz]
-            vx = [xx, xy, xz]
-            vz = [zx, zy, zz]
-            # calculate the missing y vector
-            vy = [yx, yy, yz] = self.cross(vz,vx)
-            matrix = [[ xx, yx, zx, ox],
-                    [ xy, yy, zy, oy],
-                    [ xz, yz, zz, oz],
-                    [  0,  0,  0,  1]]
-            transform_matrix = vtk.vtkMatrix4x4()
-            for column in range (0,4):
-                for row in range (0,4):
-                    transform_matrix.SetElement(column, row, matrix[column][row])
-            self.SetUserMatrix(transform_matrix)
-
-
-
-
+            scale = self.coords()
+            self.SetScale(scale,scale,scale)
 
 # Collcts a list of Actors and Assemblies into a new assembly
 class Collection(ArgsBase,vtk.vtkAssembly):
@@ -1206,13 +1205,7 @@ def main(argv_options, comp,
         get_actors_to_update(model)
         # Update backplot
         backplot.update()
-        # Update halpins
-        comp['work_pos_x'] = work.current_matrix.GetElement(0,3)
-        comp['work_pos_y'] = work.current_matrix.GetElement(1,3)
-        comp['work_pos_z'] = work.current_matrix.GetElement(2,3)
-        comp['tool_pos_x'] = tooltip.current_matrix.GetElement(0,3)
-        comp['tool_pos_y'] = tooltip.current_matrix.GetElement(1,3)
-        comp['tool_pos_z'] = tooltip.current_matrix.GetElement(2,3)
+        # Update tool->world matrix
         t2w = backplot.tool2work.GetMatrix()
         r1=('{:6.3f} {:6.3f} {:6.3f} {:9.3f}'.format(t2w.GetElement(0,0), t2w.GetElement(0,1), t2w.GetElement(0,2), t2w.GetElement(0,3)))
         r2=('{:6.3f} {:6.3f} {:6.3f} {:9.3f}'.format(t2w.GetElement(1,0), t2w.GetElement(1,1), t2w.GetElement(1,2), t2w.GetElement(1,3)))
