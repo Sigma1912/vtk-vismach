@@ -254,7 +254,7 @@ g92 = Translate([g92],c,'twp_ox_world','twp_oy_world','twp_oz_world')
 g92_idt = Scale([g92],hal,0,'motion.switchkins-type',1,0)
 g92_tcp = Scale([g92],hal,1,'motion.switchkins-type',1,0)
 # Create geometry for the work piece
-work_piece = BoxCentered(600,600,600)
+work_piece = Box(600,600,600)
 work_piece = Translate([work_piece],0,0,300)
 # Make the work piece hidable
 work_piece = Scale([work_piece],c,True,'hide_work_piece',0,1)
@@ -299,8 +299,7 @@ model = Collection([
         spindle_xz,
         table,
         base,
-        wcs,
-        Arrow(c,0,0,0,('scale_coords',300),0,0,3)
+        wcs
         ])
 #hud
 myhud = Hud(color='mint',opacity=0.4) # This will always be displayed

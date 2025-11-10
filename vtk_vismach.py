@@ -107,9 +107,12 @@ class ArgsBase(object):
                     tracked_part.GetUserTransform().Concatenate(self.transformation)
 
 
+# Creates a box centered on the origin
+# Either specify the width in X and Y, and the height in Z
+# or specify the two points across the diagonal
 class Box(ArgsBase, vtk.vtkActor):
     def get_expected_args(self):
-        return ('(comp)','x1', 'y1', 'z1', 'x2', 'y2', 'z2')
+        return [('(comp)','x1', 'y1', 'z1', 'x2', 'y2', 'z2'),('(comp)','xw', 'yw', 'zw')]
 
     def create(self, *args):
         self.cube = vtk.vtkCubeSource()
@@ -120,47 +123,33 @@ class Box(ArgsBase, vtk.vtkActor):
     def update(self):
         if self.needs_updates or self.first_update:
             self.first_update = False
-            x1, y1, z1, x2, y2, z2 = self.coords()
-            if x1 > x2:
-                tmp = x1
-                x1 = x2
-                x2 = tmp
-            if y1 > y2:
-                tmp = y1
-                y1 = y2
-                y2 = tmp
-            if z1 > z2:
-                tmp = z1
-                z1 = z2
-                z2 = tmp
-            self.cube.SetXLength(x2-x1)
-            self.cube.SetYLength(y2-y1)
-            self.cube.SetZLength(z2-z1)
-            self.cube.Update()
-            self.SetPosition(x1,y1,z1)
-            self.AddPosition((x2-x1)/2,(y2-y1)/2,(z2-z1)/2)
-
-
-# specify the width in X and Y, and the height in Z
-# the box is centered on the origin
-class BoxCentered(ArgsBase, vtk.vtkActor):
-    def get_expected_args(self):
-        return ('(comp)','xw', 'yw', 'zw')
-
-    def create(self, *args):
-        self.cube = vtk.vtkCubeSource()
-        mapper = vtk.vtkPolyDataMapper()
-        mapper.SetInputData(self.cube.GetOutput())
-        self.SetMapper(mapper)
-
-    def update(self):
-        if self.needs_updates or self.first_update:
-            self.first_update = False
-            xw, yw, zw = self.coords()
-            self.cube.SetXLength(xw)
-            self.cube.SetYLength(yw)
-            self.cube.SetZLength(zw)
-            self.cube.Update()
+            dims = self.coords()
+            if len(dims) == 3:
+                xw, yw, zw = self.coords()
+                self.cube.SetXLength(xw)
+                self.cube.SetYLength(yw)
+                self.cube.SetZLength(zw)
+                self.cube.Update()
+            if len(dims) == 6:
+                x1, y1, z1, x2, y2, z2 = self.coords()
+                if x1 > x2:
+                    tmp = x1
+                    x1 = x2
+                    x2 = tmp
+                if y1 > y2:
+                    tmp = y1
+                    y1 = y2
+                    y2 = tmp
+                if z1 > z2:
+                    tmp = z1
+                    z1 = z2
+                    z2 = tmp
+                self.cube.SetXLength(x2-x1)
+                self.cube.SetYLength(y2-y1)
+                self.cube.SetZLength(z2-z1)
+                self.cube.Update()
+                self.SetPosition(x1,y1,z1)
+                self.AddPosition((x2-x1)/2,(y2-y1)/2,(z2-z1)/2)
 
 
 # specify the width in X and Y, and the height in Z
@@ -690,7 +679,7 @@ class Scale(ArgsBase,vtk.vtkAssembly):
 # input parts will first be rotated and then translated
 class MatrixTransform(ArgsBase,vtk.vtkAssembly):
     def get_expected_args(self):
-        return ('[parts]','(comp)','ox','oy','oz','xx','xy','xz','zx','zy','zz')
+        return ('[parts]','(comp)','xx','xy','xz','zx','zy','zz','px','py','pz')
 
     def cross(self, a, b):
         return [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]]
@@ -698,16 +687,16 @@ class MatrixTransform(ArgsBase,vtk.vtkAssembly):
     def update(self):
         if self.needs_updates or self.first_update:
             self.first_update = False
-            ox, oy, oz, xx, xy, xz, zx, zy, zz = self.coords()
+            xx, xy, xz, zx, zy, zz, px, py, pz  = self.coords()
             # create transformation
-            vo = [ox, oy, oz]
+            vp = [px, py, pz]
             vx = [xx, xy, xz]
             vz = [zx, zy, zz]
             # calculate the missing y vector
             vy = [yx, yy, yz] = self.cross(vz,vx)
-            matrix = [[ xx, yx, zx, ox],
-                      [ xy, yy, zy, oy],
-                      [ xz, yz, zz, oz],
+            matrix = [[ xx, yx, zx, px],
+                      [ xy, yy, zy, py],
+                      [ xz, yz, zz, pz],
                       [  0,  0,  0,  1]]
             transform_matrix = vtk.vtkMatrix4x4()
             for column in range (0,4):
@@ -806,7 +795,7 @@ class Hud(vtk.vtkActor2D):
         self.strs = []
         self.hud_lines = []
         self.show_tags = []
-        self.hide_alls = []
+        self.hide_huds = []
         self.extra_text_enable = False
         self.extra_text = None
         self.textMapper = vtk.vtkTextMapper()
@@ -843,8 +832,8 @@ class Hud(vtk.vtkActor2D):
         self.show_tags += [[None, comp, pin, offs]]
 
     # hides the complete hud if the pin value is equal to val
-    def hide_all(self,comp, pin, val=True):
-        self.hide_alls += [[comp, pin, val]]
+    def hide_hud(self,comp, pin, val=True):
+        self.hide_huds += [[comp, pin, val]]
 
     # update the lines in the hud using the lists created above
     def update(self):
@@ -860,7 +849,7 @@ class Hud(vtk.vtkActor2D):
         strs = []
         show_list = [None]
         # check if hud should be hidden
-        for a in self.hide_alls:
+        for a in self.hide_huds:
             comp = a[0]
             pin = a[1]
             const = a[2]
