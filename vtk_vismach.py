@@ -50,7 +50,7 @@ class ArgsBase(object):
                 raise ValueError('Expected arguments are', self.get_expected_args())
         # store parsed args
         self._coords = args
-        # prepare so at least the first update is run as instances with static values are not updated after
+        # prepare so at least the first update is run as instances with static values are not updated later
         self.first_update = True
         if hasattr(self, 'create'):
             self.create()
@@ -71,16 +71,33 @@ class ArgsBase(object):
             v = tup[0]
             s = tup[1]
         if isinstance(v, str) and isinstance(self.comp, hal.component):
+            # comp = 'c' passed (ie string value might be a local halpin name)
             if os.path.isdir(v): # Needed for ReadPolyData()
+                # string is a path (eg for ReadPolyData())
                 return v
-            return s*self.comp[v]
+            try:
+                # if the string is a local halpin name we will get a nummeric value that can be scaled
+                return s*self.comp[v]
+            except Exception as e:
+                # if that fails we return the string as we got it (eg 'x' for Axes())
+                return v
         elif isinstance(v, str) and isinstance(self.comp,type(hal)):
-            if os.path.isdir(v):  # Needed for ReadPolyData()
+            # comp = 'hal' passed (ie string value might be a global halpin name)
+            if os.path.isdir(v):
+                # string is a path (eg for ReadPolyData())
                 return v
-            return s*hal.get_value(v)
+            try:
+                # if the string is a global halpin name we will get a nummeric value that can be scaled
+                return s*hal.get_value(v)
+            except Exception as e:
+                # if that fails we return the string as we got it (eg 'x' for Axes())
+                return v
         else:
-            if isinstance(v,str) or v == None: # eg a string filename from 'ReadPolyData()' or None for color
+            # no comp passed (ie none of the values are halpin names)
+            if isinstance(v,str) or v == None:
+                # eg a string filename from 'ReadPolyData()' or None for Color() to set opacity
                 return v
+            # contant nummeric value
             return s*v
 
     def capture(self):
@@ -99,7 +116,6 @@ class Box(ArgsBase, vtk.vtkActor):
         mapper = vtk.vtkPolyDataMapper()
         mapper.SetInputData(self.cube.GetOutput())
         self.SetMapper(mapper)
-        self.SetUserTransform(vtk.vtkTransform())
 
     def update(self):
         if self.needs_updates or self.first_update:
@@ -136,7 +152,6 @@ class BoxCentered(ArgsBase, vtk.vtkActor):
         mapper = vtk.vtkPolyDataMapper()
         mapper.SetInputData(self.cube.GetOutput())
         self.SetMapper(mapper)
-        self.SetUserTransform(vtk.vtkTransform())
 
     def update(self):
         if self.needs_updates or self.first_update:
@@ -159,7 +174,6 @@ class Sphere(ArgsBase, vtk.vtkActor):
         mapper = vtk.vtkPolyDataMapper()
         mapper.SetInputData(self.sphere.GetOutput())
         self.SetMapper(mapper)
-        self.SetUserTransform(vtk.vtkTransform())
 
     def update(self):
         if self.needs_updates or self.first_update:
@@ -228,7 +242,7 @@ class CylinderX(CylinderY):
             self.cylinder.Update()
 
 
-# draw a line from point_1 to point_2
+# draw a line from one point to another
 class Line(ArgsBase, vtk.vtkActor):
     def get_expected_args(self):
         return ('(comp)','x_start', 'y_start', 'z_start', 'x_end', 'y_end', 'z_end')
@@ -238,7 +252,6 @@ class Line(ArgsBase, vtk.vtkActor):
         mapper = vtk.vtkPolyDataMapper()
         mapper.SetInputConnection(self.lineSource.GetOutputPort())
         self.SetMapper(mapper)
-        self.SetUserTransform(vtk.vtkTransform())
 
     def update(self):
         if self.needs_updates or self.first_update:
@@ -303,7 +316,7 @@ class CylinderOriented(ArgsBase, vtk.vtkActor):
 
 
 # Creates a 3d arrow pointing from (xs,ys,zs) to (xe,ye,ze)
-class ArrowOriented(ArgsBase, vtk.vtkActor):
+class Arrow(ArgsBase, vtk.vtkActor):
     def get_expected_args(self):
         return ('(comp)','x_start', 'y_start', 'z_start', 'x_end', 'y_end', 'z_end', 'radius')
 
@@ -322,8 +335,7 @@ class ArrowOriented(ArgsBase, vtk.vtkActor):
             xs, ys, zs, xe, ye, ze, radius,  = self.coords()
             # Create arrow (arrows are created along the X axis by default)
             self.arrowSource.SetShaftRadius(radius)
-            #self.arrowSource.SetTipLength(radius*10/length)
-            self.arrowSource.SetTipRadius(radius*3)
+            self.arrowSource.SetTipRadius(radius*1.6)
             self.arrowSource.SetTipResolution(self.resolution)
             # Generate a random start and end point
             startPoint = [xs, ys, zs]
@@ -336,7 +348,7 @@ class ArrowOriented(ArgsBase, vtk.vtkActor):
             vtk.vtkMath.Subtract(endPoint, startPoint, normalizedX)
             length = vtk.vtkMath.Norm(normalizedX)
             if length < 0.1: length = 1
-            self.arrowSource.SetTipLength(radius*2/length)
+            self.arrowSource.SetTipLength(radius*8/length)
             vtk.vtkMath.Normalize(normalizedX)
             vtk.vtkMath.Cross(normalizedX, [0,0,1], normalizedZ)
             vtk.vtkMath.Normalize(normalizedZ)
@@ -364,7 +376,7 @@ class ReadPolyData(ArgsBase, vtk.vtkActor):
         return ('(comp)','filename','path')
 
     def create(self):
-        self.SetUserTransform(vtk.vtkTransform())
+        pass
 
     def update(self):
         if self.needs_updates or self.first_update:
@@ -430,106 +442,6 @@ class ReadPolyData(ArgsBase, vtk.vtkActor):
             self.GetProperty().SetBackfaceCulling(1)
 
 
-# Create a trihedron indicating coordinate orientation
-# Note that Color() will not have any effect on this
-# Also note that the labels method (eg SetXAxisLabelText) is broken
-class Axes_orig(ArgsBase,vtk.vtkAxesActor):
-    def get_expected_args(self):
-        return ('(comp)','scale')
-
-    def create (self):
-        radius_factor = 0.5
-        self.SetUserTransform(vtk.vtkTransform())
-        self.SetShaftTypeToCylinder()
-        self.SetCylinderRadius(radius_factor * self.GetCylinderRadius())
-        self.SetConeRadius(radius_factor * self.GetConeRadius())
-
-    def update(self):
-        if self.needs_updates or self.first_update:
-            self.first_update = False
-            scale = self.coords()
-            self.SetScale(scale,scale,scale)
-
-
-# create an arrow along x (default), y or z
-class Arrow(ArgsBase, vtk.vtkActor):
-    def __init__(self, length, radius, resolution, axis='x'):
-        # Create arrow (arrows are created along the X axis by default)
-        arrowSource = vtk.vtkArrowSource()
-        arrowSource.SetTipResolution(resolution)
-        arrowSource.SetShaftRadius(radius)
-        arrowSource.SetTipRadius(radius*1.6)
-        if length < 0.1: length = 1
-        arrowSource.SetTipLength(radius*8/length)
-        self.mapper = vtk.vtkPolyDataMapper()
-        self.mapper.SetInputConnection(arrowSource.GetOutputPort())
-        self.SetMapper(self.mapper)
-        transform = vtk.vtkTransform()
-        colors = vtk.vtkNamedColors()
-        color = 'red'
-        if axis == 'y':
-            transform.RotateZ(90)
-            color = 'lime'
-        elif axis == 'z':
-            transform.RotateY(-90)
-            color = 'blue'
-        transform.Scale(length, 1.0, 1.0)  # scale along the height vector
-        self.SetUserTransform(transform)
-        self.GetProperty().SetColor(colors.GetColor3d(color))
-
-
-# Create a trihedron indicating coordinate orientation
-# Basically the same as the vtkAxesActor but Color() can be used to change color and opacity
-class Axes(ArgsBase, vtk.vtkAssembly):
-    def get_expected_args(self):
-        return ('(comp)','scale')
-
-    def create(self):
-        self.SetUserTransform(vtk.vtkTransform())
-        for axis in ('x','y','z'):
-            arrow = Arrow(1, 0.025 , 10, axis)
-            self.AddPart(arrow)
-
-    def update(self):
-        if self.needs_updates or self.first_update:
-            self.first_update = False
-            scale = self.coords()
-            self.SetScale(scale,scale,scale)
-
-
-# Collcts a list of Actors and Assemblies into a new assembly
-class Collection(ArgsBase,vtk.vtkAssembly):
-    pass
-
-
-# draw a grid, use quad_size to define the size of a quadrant
-# As for why we are not using vtkRectilinearGrid() with wireframe for this see:
-# https://gitlab.kitware.com/vtk/vtk/-/issues/18453
-class Grid(ArgsBase,vtk.vtkAssembly):
-    def get_expected_args(self):
-        return ('(comp)','quad_size','spacing')
-
-    def create (self):
-        self.SetUserTransform(vtk.vtkTransform())
-        self.qs, self.sp = self.coords()
-        qs = self.qs
-        sp = self.sp
-        line_values = range(-qs,qs+sp,sp)
-        dim = len(line_values)
-        for i in line_values:
-            # create line in X direction
-            line_x = Line(-qs, i, 0, qs, i, 0)
-            self.AddPart(line_x)
-            # create line in Y direction
-            line_y = Line(i,-qs, 0,  i, qs, 0)
-            self.AddPart(line_y)
-
-    def update(self):
-        if self.needs_updates or self.first_update:
-            self.first_update = False
-            self.qs, self.sp = self.coords()
-
-
 # create a plane, use quad_size to define the size of a quadrant
 class Plane(ArgsBase,vtk.vtkActor):
     def get_expected_args(self):
@@ -549,6 +461,63 @@ class Plane(ArgsBase,vtk.vtkActor):
             self.first_update = False
             scale = self.coords()*2
             self.SetScale(scale,scale,scale)
+
+
+# Create a trihedron indicating coordinate orientation
+# Basically the same as the vtkAxesActor but Color() can be used to change color and opacity
+class Axes(ArgsBase, vtk.vtkAssembly):
+    def get_expected_args(self):
+        return ('(comp)','scale')
+
+    def create(self):
+        for axis in ('x','y','z'):
+            arrow = Arrow(0,0,0,1,0,0,0.02)
+            transform = vtk.vtkTransform()
+            colors = vtk.vtkNamedColors()
+            color = 'red'
+            if axis == 'y':
+                transform.RotateZ(90)
+                color = 'lime'
+            elif axis == 'z':
+                transform.RotateY(-90)
+                color = 'blue'
+            arrow.SetUserTransform(transform)
+            arrow.GetProperty().SetColor(colors.GetColor3d(color))
+            self.AddPart(arrow)
+
+    def update(self):
+        if self.needs_updates or self.first_update:
+            self.first_update = False
+            scale = self.coords()
+            self.SetScale(scale,scale,scale)
+
+
+# draw a grid, use quad_size to define the size of a quadrant
+# As for why we are not using vtkRectilinearGrid() with wireframe for this see:
+# https://gitlab.kitware.com/vtk/vtk/-/issues/18453
+class Grid(ArgsBase,vtk.vtkAssembly):
+    def get_expected_args(self):
+        return ('(comp)','quad_size','spacing')
+
+    def create (self):
+        self.qs, self.sp = self.coords()
+        qs = self.qs
+        sp = self.sp
+        line_values = range(-qs,qs+sp,sp)
+        dim = len(line_values)
+        for i in line_values:
+            # create line in X direction
+            line_x = Line(-qs, i, 0, qs, i, 0)
+            self.AddPart(line_x)
+            # create line in Y direction
+            line_y = Line(i,-qs, 0,  i, qs, 0)
+            self.AddPart(line_y)
+
+    def update(self):
+        if self.needs_updates or self.first_update:
+            self.first_update = False
+            self.qs, self.sp = self.coords()
+            #TODO find a way for this to work with halpin values
 
 
 class Translate(ArgsBase,vtk.vtkAssembly):
@@ -580,6 +549,11 @@ class Rotate(ArgsBase,vtk.vtkAssembly):
 
     def transform(self):
         self.SetUserTransform(self.transformation)
+
+
+# Collects a list of Actors and Assemblies into a new assembly
+class Collection(ArgsBase,vtk.vtkAssembly):
+    pass
 
 
 class Color(ArgsBase,vtk.vtkAssembly):

@@ -110,7 +110,7 @@ class Nutate(Collection):
 
 # Creates a 3d arrow pointing from (xs,ys,zs) to (xe,ye,ze)
 # where 'ye' depends on two hal values (ye = 'twp_oy_world' - 'joint.1.pos-fb')
-class CustomArrowOriented(ArrowOriented):
+class CustomArrow(Arrow):
     def coords(self):
         xs, ys, zs, xe, ye, ze, radius = super().coords()
         ye -= hal.get_value('joint.1.pos-fb')
@@ -213,10 +213,10 @@ twp_matrix = ('twp_ox', 'twp_oy', 'twp_oz',
               'twp_zx', 'twp_zy', 'twp_zz')
 # TWP-Defined
 work_plane_defined = MatrixTransform([Grid(300, 10)],c,*twp_matrix)
-wcs2twp_defined = ArrowOriented(c,0,0,0,'twp_ox','twp_oy','twp_oz',20)
+wcs2twp_defined = Arrow(c,0,0,0,'twp_ox','twp_oy','twp_oz',3)
 work_plane_coords_defined =  MatrixTransform([Axes(c,('scale_coords',300))],c,*twp_matrix)
 # create an indicator for the currently active G52/G92 offset for definded twp
-g92_twp_defined = MatrixTransform([ArrowOriented(c,0,0,0,'g92_x','g92_y','g92_z',20)],c,*twp_matrix)
+g92_twp_defined = MatrixTransform([Arrow(c,0,0,0,'g92_x','g92_y','g92_z',3)],c,*twp_matrix)
 g92_twp_defined = Translate([g92_twp_defined], machine_zero_x,  machine_zero_y, machine_zero_z)
 g92_twp_defined = Translate([g92_twp_defined],c,'twp_ox_world','twp_oy_world','twp_oz_world')
 work_plane_defined = Collection([work_plane_defined,
@@ -229,10 +229,10 @@ work_plane_defined = Color([work_plane_defined],c,None,('twp_defined',0.2))
 work_plane_active =  MatrixTransform([Plane(300)],c,*twp_matrix)
 # for twp-active = true, we show the plane in pink
 work_plane_active = Color([work_plane_active],c,1,0,1,0.3)
-wcs2twp_active = ArrowOriented(c,0,0,0,'twp_ox','twp_oy','twp_oz',20)
+wcs2twp_active = Arrow(c,0,0,0,'twp_ox','twp_oy','twp_oz',3)
 work_plane_coords_active =  MatrixTransform([Axes(c,('scale_coords',300))],c,*twp_matrix)
 # create an indicator for the currently active G52/G92 offset in active twp mode
-g92_twp_active = MatrixTransform([ArrowOriented(c,0,0,0,'g92_x','g92_y','g92_z',20)],c,*twp_matrix)
+g92_twp_active = MatrixTransform([Arrow(c,0,0,0,'g92_x','g92_y','g92_z',3)],c,*twp_matrix)
 g92_twp_active = Translate([g92_twp_active], machine_zero_x,  machine_zero_y, machine_zero_z)
 g92_twp_active = Translate([g92_twp_active],c,'twp_ox_world','twp_oy_world','twp_oz_world')
 work_plane_active = Collection([work_plane_active,
@@ -248,7 +248,7 @@ work_plane = Collection([work_plane_defined,
 work_plane = Translate([work_plane], machine_zero_x,  machine_zero_y, machine_zero_z)
 work_plane = Translate([work_plane],c,'twp_ox_world','twp_oy_world','twp_oz_world')
 # create an indicator for the currently active G52/G92 offset in IDENTITY and TCP modes
-g92 = ArrowOriented(c,0,0,0,'g92_x','g92_y','g92_z',20)
+g92 = Arrow(c,0,0,0,'g92_x','g92_y','g92_z',3)
 g92 = Translate([g92], machine_zero_x,  machine_zero_y, machine_zero_z)
 g92 = Translate([g92],c,'twp_ox_world','twp_oy_world','twp_oz_world')
 g92_idt = Scale([g92],hal,0,'motion.switchkins-type',1,0)
@@ -292,17 +292,16 @@ table = Translate([table], 0, -machine_zero_y, 0)
 base = Color([EGO_BC],0.3,0.3,0.3,1)
 # Make it hidable
 base = Scale([base],c,True,'hide_machine_model',0,1)
-#wcs = ArrowOriented(c,0,0,0,'twp_ox_world','work_pos_y','twp_oz_world',20)
-wcs = CustomArrowOriented(c,0,0,0,'twp_ox_world','twp_oy_world','twp_oz_world',20)
+wcs = CustomArrow(c,0,0,0,'twp_ox_world','twp_oy_world','twp_oz_world',3)
 wcs = Translate([wcs], machine_zero_x, 0, machine_zero_z)
 model = Collection([
         machine_coords,
         spindle_xz,
         table,
         base,
-        wcs
+        wcs,
+        Arrow(c,0,0,0,('scale_coords',300),0,0,3)
         ])
-
 #hud
 myhud = Hud(color='mint',opacity=0.4) # This will always be displayed
 myhud.add_txt('DMU-160-P')
