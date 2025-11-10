@@ -99,6 +99,7 @@ class Box(ArgsBase, vtk.vtkActor):
         mapper = vtk.vtkPolyDataMapper()
         mapper.SetInputData(self.cube.GetOutput())
         self.SetMapper(mapper)
+        self.SetUserTransform(vtk.vtkTransform())
 
     def update(self):
         if self.needs_updates or self.first_update:
@@ -135,6 +136,7 @@ class BoxCentered(ArgsBase, vtk.vtkActor):
         mapper = vtk.vtkPolyDataMapper()
         mapper.SetInputData(self.cube.GetOutput())
         self.SetMapper(mapper)
+        self.SetUserTransform(vtk.vtkTransform())
 
     def update(self):
         if self.needs_updates or self.first_update:
@@ -157,6 +159,7 @@ class Sphere(ArgsBase, vtk.vtkActor):
         mapper = vtk.vtkPolyDataMapper()
         mapper.SetInputData(self.sphere.GetOutput())
         self.SetMapper(mapper)
+        self.SetUserTransform(vtk.vtkTransform())
 
     def update(self):
         if self.needs_updates or self.first_update:
@@ -228,21 +231,22 @@ class CylinderX(CylinderY):
 # draw a line from point_1 to point_2
 class Line(ArgsBase, vtk.vtkActor):
     def get_expected_args(self):
-        return ('(comp)','x_start', 'y_start', 'z_start', 'x_end', 'y_end', 'z_end', 'radius')
+        return ('(comp)','x_start', 'y_start', 'z_start', 'x_end', 'y_end', 'z_end')
 
     def create(self):
         self.lineSource = vtk.vtkLineSource()
         mapper = vtk.vtkPolyDataMapper()
         mapper.SetInputConnection(self.lineSource.GetOutputPort())
         self.SetMapper(mapper)
+        self.SetUserTransform(vtk.vtkTransform())
 
     def update(self):
         if self.needs_updates or self.first_update:
             self.first_update = False
-            xs, ys, zs, xe, ye, ze, r = self.coords()
+            xs, ys, zs, xe, ye, ze = self.coords()
             self.lineSource.SetPoint1(xs,ys,zs)
             self.lineSource.SetPoint2(xe,ye,ze)
-            self.GetProperty().SetLineWidth(r)
+            self.GetProperty().SetLineWidth(1)
 
 
 # Creates a 3d cylinder from (xs,ys,zs) to (xe,ye,ze)
@@ -427,6 +431,8 @@ class ReadPolyData(ArgsBase, vtk.vtkActor):
 
 
 # Create a trihedron indicating coordinate orientation
+# Note that Color() will not have any effect on this
+# Also note that the labels method (eg SetXAxisLabelText) is broken
 class Axes_orig(ArgsBase,vtk.vtkAxesActor):
     def get_expected_args(self):
         return ('(comp)','scale')
@@ -445,39 +451,43 @@ class Axes_orig(ArgsBase,vtk.vtkAxesActor):
             self.SetScale(scale,scale,scale)
 
 
-class Axes(ArgsBase, vtk.vtkAssembly):
-    class Arrow(vtk.vtkActor):
-        def __init__(self, axis, length, radius, resolution):
-            # Create arrow (arrows are created along the X axis by default)
-            arrowSource = vtk.vtkArrowSource()
-            arrowSource.SetTipResolution(resolution)
-            arrowSource.SetShaftRadius(radius)
-            arrowSource.SetTipRadius(radius*1.6)
-            if length < 0.1: length = 1
-            arrowSource.SetTipLength(radius*8/length)
-            self.mapper = vtk.vtkPolyDataMapper()
-            self.mapper.SetInputConnection(arrowSource.GetOutputPort())
-            self.SetMapper(self.mapper)
-            transform = vtk.vtkTransform()
-            colors = vtk.vtkNamedColors()
-            color = 'red'
-            if axis == 'y':
-                transform.RotateZ(90)
-                color = 'green'
-            elif axis == 'z':
-                transform.RotateY(-90)
-                color = 'blue'
-            transform.Scale(length, 1.0, 1.0)  # scale along the height vector
-            self.SetUserTransform(transform)
-            self.GetProperty().SetColor(colors.GetColor3d(color))
+# create an arrow along x (default), y or z
+class Arrow(ArgsBase, vtk.vtkActor):
+    def __init__(self, length, radius, resolution, axis='x'):
+        # Create arrow (arrows are created along the X axis by default)
+        arrowSource = vtk.vtkArrowSource()
+        arrowSource.SetTipResolution(resolution)
+        arrowSource.SetShaftRadius(radius)
+        arrowSource.SetTipRadius(radius*1.6)
+        if length < 0.1: length = 1
+        arrowSource.SetTipLength(radius*8/length)
+        self.mapper = vtk.vtkPolyDataMapper()
+        self.mapper.SetInputConnection(arrowSource.GetOutputPort())
+        self.SetMapper(self.mapper)
+        transform = vtk.vtkTransform()
+        colors = vtk.vtkNamedColors()
+        color = 'red'
+        if axis == 'y':
+            transform.RotateZ(90)
+            color = 'lime'
+        elif axis == 'z':
+            transform.RotateY(-90)
+            color = 'blue'
+        transform.Scale(length, 1.0, 1.0)  # scale along the height vector
+        self.SetUserTransform(transform)
+        self.GetProperty().SetColor(colors.GetColor3d(color))
 
+
+# Create a trihedron indicating coordinate orientation
+# Basically the same as the vtkAxesActor but Color() can be used to change color and opacity
+class Axes(ArgsBase, vtk.vtkAssembly):
     def get_expected_args(self):
         return ('(comp)','scale')
 
     def create(self):
         self.SetUserTransform(vtk.vtkTransform())
         for axis in ('x','y','z'):
-            arrow = self.Arrow(axis, 1, 0.025 , 10)
+            arrow = Arrow(1, 0.025 , 10, axis)
             self.AddPart(arrow)
 
     def update(self):
@@ -487,13 +497,12 @@ class Axes(ArgsBase, vtk.vtkAssembly):
             self.SetScale(scale,scale,scale)
 
 
-
 # Collcts a list of Actors and Assemblies into a new assembly
 class Collection(ArgsBase,vtk.vtkAssembly):
     pass
 
 
-# draw a grid, use quad_size to define the half-width from the origin (ox,oy,oz)
+# draw a grid, use quad_size to define the size of a quadrant
 # As for why we are not using vtkRectilinearGrid() with wireframe for this see:
 # https://gitlab.kitware.com/vtk/vtk/-/issues/18453
 class Grid(ArgsBase,vtk.vtkAssembly):
@@ -503,42 +512,17 @@ class Grid(ArgsBase,vtk.vtkAssembly):
     def create (self):
         self.SetUserTransform(vtk.vtkTransform())
         self.qs, self.sp = self.coords()
-        self.r = 1
-        self.grid()
-
-    def grid(self):
         qs = self.qs
         sp = self.sp
         line_values = range(-qs,qs+sp,sp)
         dim = len(line_values)
         for i in line_values:
             # create line in X direction
-            line = vtk.vtkActor()
-            line.SetUserTransform(vtk.vtkTransform())
-            lineSource = vtk.vtkLineSource()
-            lineSource.SetPoint1(-qs, i, 0)
-            lineSource.SetPoint2( qs, i, 0)
-            # Visualize line in X direction
-            colors = vtk.vtkNamedColors()
-            mapper1 = vtk.vtkPolyDataMapper()
-            mapper1.SetInputConnection(lineSource.GetOutputPort())
-            line.SetMapper(mapper1)
-            line.GetProperty().SetLineWidth(self.r)
-            line.GetProperty().SetColor(colors.GetColor3d('Silver'))
-            self.AddPart(line)
+            line_x = Line(-qs, i, 0, qs, i, 0)
+            self.AddPart(line_x)
             # create line in Y direction
-            line = vtk.vtkActor()
-            lineSource = vtk.vtkLineSource()
-            lineSource.SetPoint1( i,-qs, 0)
-            lineSource.SetPoint2( i, qs, 0)
-            # Visualize line in Y direction
-            colors = vtk.vtkNamedColors()
-            mapper2 = vtk.vtkPolyDataMapper()
-            mapper2.SetInputConnection(lineSource.GetOutputPort())
-            line.SetMapper(mapper2)
-            line.GetProperty().SetLineWidth(self.r)
-            line.GetProperty().SetColor(colors.GetColor3d('Silver'))
-            self.AddPart(line)
+            line_y = Line(i,-qs, 0,  i, qs, 0)
+            self.AddPart(line_y)
 
     def update(self):
         if self.needs_updates or self.first_update:
@@ -546,40 +530,25 @@ class Grid(ArgsBase,vtk.vtkAssembly):
             self.qs, self.sp = self.coords()
 
 
-# create a plane, use quad_size to define the half-width from the origin (ox,oy,oz)
-# This could also be used to draw a grid using .GetProperty().SetRepresentationToWireframe()
-# however there is a bug in vtk that shows black artefacts on some hardware:
-# https://gitlab.kitware.com/vtk/vtk/-/issues/18453
+# create a plane, use quad_size to define the size of a quadrant
 class Plane(ArgsBase,vtk.vtkActor):
     def get_expected_args(self):
         return ('(comp)','quad_size')
 
     def create (self):
-        self.grid = vtk.vtkRectilinearGrid()
-        self.xArray = vtk.vtkDoubleArray()
-        self.yArray = vtk.vtkDoubleArray()
-        zArray = vtk.vtkDoubleArray()
-        zArray.InsertNextValue(0.0)
-        self.grid.SetZCoordinates(zArray)
-        mapper = vtk.vtkDataSetMapper()
-        mapper.SetInputData(self.grid)
-        self.SetUserTransform(vtk.vtkTransform())
+        # Create a plane in xy with origin at (0,0,0)
+        planeSource = vtk.vtkPlaneSource()
+        planeSource.SetNormal(0,0,1)
+        planeSource.Update()
+        mapper = vtk.vtkPolyDataMapper()
+        mapper.SetInputConnection(planeSource.GetOutputPort())
         self.SetMapper(mapper)
 
     def update(self):
         if self.needs_updates or self.first_update:
             self.first_update = False
-            qs = self.coords()
-            sp = qs
-            line_values = range(-qs,qs+sp,sp)
-            dim = len(line_values)
-            self.grid.SetDimensions(dim, dim, 1)
-            for line in line_values:
-                self.xArray.InsertNextValue(line)
-                self.yArray.InsertNextValue(line)
-            self.grid.SetXCoordinates(self.xArray)
-            self.grid.SetYCoordinates(self.yArray)
-
+            scale = self.coords()*2
+            self.SetScale(scale,scale,scale)
 
 
 class Translate(ArgsBase,vtk.vtkAssembly):
