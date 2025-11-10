@@ -208,9 +208,9 @@ work = Capture()
 # Create an indicator for the work coordinates
 work_axes = Axes(100)
 # TWP Matrix
-twp_matrix = ('twp_ox', 'twp_oy', 'twp_oz',
-              'twp_xx', 'twp_xy', 'twp_xz',
-              'twp_zx', 'twp_zy', 'twp_zz')
+twp_matrix = ('twp_xx', 'twp_xy', 'twp_xz',
+              'twp_zx', 'twp_zy', 'twp_zz',
+              'twp_ox', 'twp_oy', 'twp_oz',)
 # TWP-Defined
 work_plane_defined = MatrixTransform([Grid(300, 10)],c,*twp_matrix)
 wcs2twp_defined = Arrow(c,0,0,0,'twp_ox','twp_oy','twp_oz',3)

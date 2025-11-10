@@ -911,8 +911,12 @@ class MainWindow(Qt.QMainWindow):
         self.trackTool = False
         self.trackWork = False
         self.last_tracking_position = (0,0,0)
+        self.no_buttons = False
         if '--no-buttons' in argv_options:
+            self.no_buttons = True
             print('VISMACH: Window without buttons requested')
+            # VTK Interactor (this is where the model is going to be)
+            self.vtkInteractor = QVTKRenderWindowInteractor(self)
             self.setCentralWidget(self.vtkInteractor)
         else:
             # Side panel for the buttons
@@ -984,6 +988,9 @@ class MainWindow(Qt.QMainWindow):
             self.btnClrPlot.setText('Clear Backplot')
             self.btnClrPlot.clicked.connect(self.btnClrPlot_clicked)
             sdePnlLyt.addWidget(self.btnClrPlot)
+            self.rbtnHud = QtWidgets.QRadioButton("Show Overlay")
+            self.rbtnHud.setChecked(True)
+            sdePnlLyt.addWidget(self.rbtnHud)
             sdePnlLyt.addStretch()
             # VTK Interactor (this is where the model is going to be)
             self.vtkInteractor = QVTKRenderWindowInteractor(self)
@@ -1070,6 +1077,9 @@ class MainWindow(Qt.QMainWindow):
         elif self.rbtnTrkg.tracking == "Work":
             self.trackWork = True
             self.trackTool = False
+        else:
+            self.trackWork = False
+            self.trackTool = False
 
     def btnClrPlot_clicked(self):
         self.backplot.initial_run = True
@@ -1103,30 +1113,37 @@ def main(argv_options, comp,
         get_actors_to_update(model)
         # Update backplot
         backplot.update()
-        # Update tool->world matrix
-        t2w = backplot.tool2work.GetMatrix()
-        r1=('{:6.3f} {:6.3f} {:6.3f} {:9.3f}'.format(t2w.GetElement(0,0), t2w.GetElement(0,1), t2w.GetElement(0,2), t2w.GetElement(0,3)))
-        r2=('{:6.3f} {:6.3f} {:6.3f} {:9.3f}'.format(t2w.GetElement(1,0), t2w.GetElement(1,1), t2w.GetElement(1,2), t2w.GetElement(1,3)))
-        r3=('{:6.3f} {:6.3f} {:6.3f} {:9.3f}'.format(t2w.GetElement(2,0), t2w.GetElement(2,1), t2w.GetElement(2,2), t2w.GetElement(2,3)))
-        # Update HUD
-        for hud in huds:
-            hud.extra_text = '\nTool -> Work Transformation:\n'+'   X      Y      Z      Pos\n'+r1+'\n'+r2+'\n'+r3
-            hud.update()
-        # Update camera tracking
-        if mainWindow.trackTool or  mainWindow.trackWork:
-            renderer = mainWindow.vtkInteractor.GetRenderWindow().GetRenderers().GetFirstRenderer()
-            camera = renderer.GetActiveCamera()
-            fp = camera.GetFocalPoint()
-            cp = camera.GetPosition()
-            if mainWindow.trackTool:
-                matrix = tooltip.current_matrix
+        if not mainWindow.no_buttons:
+            # Update tool->world matrix
+            t2w = backplot.tool2work.GetMatrix()
+            r1=('{:6.3f} {:6.3f} {:6.3f} {:9.3f}'.format(t2w.GetElement(0,0), t2w.GetElement(0,1), t2w.GetElement(0,2), t2w.GetElement(0,3)))
+            r2=('{:6.3f} {:6.3f} {:6.3f} {:9.3f}'.format(t2w.GetElement(1,0), t2w.GetElement(1,1), t2w.GetElement(1,2), t2w.GetElement(1,3)))
+            r3=('{:6.3f} {:6.3f} {:6.3f} {:9.3f}'.format(t2w.GetElement(2,0), t2w.GetElement(2,1), t2w.GetElement(2,2), t2w.GetElement(2,3)))
+            # Update HUD
+            if mainWindow.rbtnHud.isChecked():
+                renderer = mainWindow.vtkInteractor.GetRenderWindow().GetRenderers().GetFirstRenderer()
+                for hud in huds:
+                    hud.extra_text = '\nTool -> Work Transformation:\n'+'   X      Y      Z      Pos\n'+r1+'\n'+r2+'\n'+r3
+                    hud.update()
+                    hud.VisibilityOn()
             else:
-                matrix = work.current_matrix
-            x, y, z = matrix.GetElement(0,3), matrix.GetElement(1,3), matrix.GetElement(2,3)
-            xl,yl,zl = mainWindow.last_tracking_position
-            camera.SetFocalPoint(fp[0] + x - xl, fp[1] + y - yl, fp[2] + z - zl)
-            camera.SetPosition  (cp[0] + x - xl, cp[1] + y - yl, cp[2] + z - zl)
-            mainWindow.last_tracking_position = x,y,z
+                for hud in huds:
+                    hud.VisibilityOff()
+            # Update camera tracking
+            if mainWindow.trackTool or  mainWindow.trackWork:
+                renderer = mainWindow.vtkInteractor.GetRenderWindow().GetRenderers().GetFirstRenderer()
+                camera = renderer.GetActiveCamera()
+                fp = camera.GetFocalPoint()
+                cp = camera.GetPosition()
+                if mainWindow.trackTool:
+                    matrix = tooltip.current_matrix
+                else:
+                    matrix = work.current_matrix
+                x, y, z = matrix.GetElement(0,3), matrix.GetElement(1,3), matrix.GetElement(2,3)
+                xl,yl,zl = mainWindow.last_tracking_position
+                camera.SetFocalPoint(fp[0] + x - xl, fp[1] + y - yl, fp[2] + z - zl)
+                camera.SetPosition  (cp[0] + x - xl, cp[1] + y - yl, cp[2] + z - zl)
+                mainWindow.last_tracking_position = x,y,z
         # Render updated data
         mainWindow.vtkInteractor.GetRenderWindow().Render()
 
