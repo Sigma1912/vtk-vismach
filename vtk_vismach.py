@@ -705,18 +705,40 @@ class MatrixTransform(ArgsBase,vtk.vtkAssembly):
             self.SetUserMatrix(transform_matrix)
 
 
-# Draws a polyline showing the path of 'tooltip' with respect to 'work'
-class Plotter(vtk.vtkActor):
-    def __init__(self, comp, work, tooltip, clear, color='magenta'):
+# Finds the Capture('tool') and Capture('work') in a model and draws a polyline showing the path of 'tooltip' with respect to 'work'
+class _Plotter(vtk.vtkActor):
+    def __init__(self, model, comp, clear, color='magenta'):
+        self.model = model          # machine model containing a least Capture('tool') and Capture('work') object
         self.comp = comp            # instance of the halcomponent used in the model
-        self.tooltip = tooltip      # Capture object with '.matrix' holding the current transformation tool->world
-        self.work = work            # Capture object with '.matrix' holding the current transformation work->world
         self.clear = clear          # halpin that clears the backplot
         self.color = color          # color of backplot in eiter nomalized RGB or one of vtkNamedColors
+        self.tool_tracker = None    # Capture object with '.matrix' holding the current transformation tool->world
+        self.work_tracker = None    # Capture object with '.matrix' holding the current transformation work->world
+        self.get_tracker(model)     # find the Capture('tool') and Capture('work') objects in the model
+        if not self.tool_tracker:
+            self.ready = False
+            print("Backplot Error: Unable to find the Capture('tool') object in the model")
+            return
+        if not self.work_tracker:
+            self.ready = False
+            print("Backplot Error: Unable to find the Capture('work') object in the model")
+            return
+        self.ready = True
         # We initialize at the origin, this is cleared and set to the actual
         # machine reference position during the 1. update loop
         self.setup_points([0,0,0])
         self.initial_run = True
+
+    def get_tracker(self, objects):
+        for item in objects.GetParts():
+            #global tool_tracker, work_tracker
+            if hasattr(item, 'GetProperty'):
+                if item.GetProperty().GetObjectName() == 'tool':
+                    self.tool_tracker = item
+                if item.GetProperty().GetObjectName() == 'work':
+                    self.work_tracker = item
+            if isinstance(item, vtk.vtkAssembly):
+                self.get_tracker(item)
 
     def setup_points(self, pos):
         self.index = 0
@@ -740,11 +762,11 @@ class Plotter(vtk.vtkActor):
 
     def update(self):
         tool2world = vtk.vtkTransform()
-        tool2world.Concatenate(self.tooltip.current_matrix)
+        tool2world.Concatenate(self.tool_tracker.current_matrix)
         #world2tool = vtk.vtkTransform()
         #world2tool = tool2world.GetInverse()
         work2world = vtk.vtkTransform()
-        work2world.Concatenate(self.work.current_matrix)
+        work2world.Concatenate(self.work_tracker.current_matrix)
         world2work = vtk.vtkTransform()
         world2work = work2world.GetInverse()
         plot_transform = vtk.vtkTransform()
@@ -985,10 +1007,11 @@ class MainWindow(Qt.QMainWindow):
             grpTrkg.setLayout(grpTrkgLyt)
             sdePnlLyt.addWidget(grpTrkg)
             # clear backplot
-            self.btnClrPlot = QtWidgets.QPushButton()
-            self.btnClrPlot.setText('Clear Backplot')
-            self.btnClrPlot.clicked.connect(self.btnClrPlot_clicked)
-            sdePnlLyt.addWidget(self.btnClrPlot)
+            if backplot.ready:
+                self.btnClrPlot = QtWidgets.QPushButton()
+                self.btnClrPlot.setText('Clear Backplot')
+                self.btnClrPlot.clicked.connect(self.btnClrPlot_clicked)
+                sdePnlLyt.addWidget(self.btnClrPlot)
             self.rbtnHud = QtWidgets.QRadioButton("Show Overlay")
             self.rbtnHud.setChecked(True)
             sdePnlLyt.addWidget(self.rbtnHud)
@@ -1087,8 +1110,7 @@ class MainWindow(Qt.QMainWindow):
 
 
 
-def main(argv_options, comp,
-         model, huds,
+def main(argv_options, comp, model, huds,
          window_title='Vtk-Vismach', window_width=600, window_height=300,
          camera_azimuth=-50, camera_elevation=30,
          background_rgb = (0.2, 0.3, 0.4)):
@@ -1097,22 +1119,7 @@ def main(argv_options, comp,
     vcomp.newpin('plotclear',hal.HAL_BIT,hal.HAL_IN)
     vcomp.ready()
     # create the backplot to be added to the renderer
-    def get_tracker(objects):
-        for item in objects.GetParts():
-            global tool_tracker, work_tracker
-            if hasattr(item, 'GetProperty'):
-                if item.GetProperty().GetObjectName() == 'tool':
-                    print('found tool_tracker')
-                    tool_tracker = item
-                if item.GetProperty().GetObjectName() == 'work':
-                    print('found work_tracker')
-                    work_tracker = item
-            if isinstance(item, vtk.vtkAssembly):
-                get_tracker(item)
-    # Update model
-    global tool_tracker, work_tracker
-    get_tracker(model)
-    backplot = Plotter(vcomp, work_tracker, tool_tracker, 'plotclear')
+    backplot = _Plotter(model, vcomp, 'plotclear')
     # Event loop to periodically update the model
     def update():
         def get_actors_to_update(objects):
@@ -1128,18 +1135,23 @@ def main(argv_options, comp,
         # Update model
         get_actors_to_update(model)
         # Update backplot
-        backplot.update()
+        if backplot.ready:
+            backplot.update()
         if not mainWindow.no_buttons:
-            # Update tool->world matrix
-            t2w = backplot.tool2work.GetMatrix()
-            r1=('{:6.3f} {:6.3f} {:6.3f} {:9.3f}'.format(t2w.GetElement(0,0), t2w.GetElement(0,1), t2w.GetElement(0,2), t2w.GetElement(0,3)))
-            r2=('{:6.3f} {:6.3f} {:6.3f} {:9.3f}'.format(t2w.GetElement(1,0), t2w.GetElement(1,1), t2w.GetElement(1,2), t2w.GetElement(1,3)))
-            r3=('{:6.3f} {:6.3f} {:6.3f} {:9.3f}'.format(t2w.GetElement(2,0), t2w.GetElement(2,1), t2w.GetElement(2,2), t2w.GetElement(2,3)))
+            if backplot.ready:
+                # Update tool->world matrix
+                t2w = backplot.tool2work.GetMatrix()
+                r1=('{:6.3f} {:6.3f} {:6.3f} {:9.3f}'.format(t2w.GetElement(0,0), t2w.GetElement(0,1), t2w.GetElement(0,2), t2w.GetElement(0,3)))
+                r2=('{:6.3f} {:6.3f} {:6.3f} {:9.3f}'.format(t2w.GetElement(1,0), t2w.GetElement(1,1), t2w.GetElement(1,2), t2w.GetElement(1,3)))
+                r3=('{:6.3f} {:6.3f} {:6.3f} {:9.3f}'.format(t2w.GetElement(2,0), t2w.GetElement(2,1), t2w.GetElement(2,2), t2w.GetElement(2,3)))
+                t2w_matrix_text = '\nTool -> Work Transformation:\n'+'   X      Y      Z      Pos\n'+r1+'\n'+r2+'\n'+r3
+            else:
+                t2w_matrix_text = ''
             # Update HUD
             if mainWindow.rbtnHud.isChecked():
                 renderer = mainWindow.vtkInteractor.GetRenderWindow().GetRenderers().GetFirstRenderer()
                 for hud in huds:
-                    hud.extra_text = '\nTool -> Work Transformation:\n'+'   X      Y      Z      Pos\n'+r1+'\n'+r2+'\n'+r3
+                    hud.extra_text = t2w_matrix_text
                     hud.update()
                     hud.VisibilityOn()
             else:
