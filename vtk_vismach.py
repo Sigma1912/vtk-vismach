@@ -775,8 +775,9 @@ class Plotter(vtk.vtkActor):
 
 # create (invisible) actor that can be used to track combined transformation to world coordinates
 class Capture(vtk.vtkActor):
-    def __init__(self):
+    def __init__(self, name):
         self.SetUserTransform(vtk.vtkTransform())
+        self.GetProperty().SetObjectName(name)
         self.current_matrix = self.GetMatrix()
         self.tracked_parts = [self]
 
@@ -1087,7 +1088,7 @@ class MainWindow(Qt.QMainWindow):
 
 
 def main(argv_options, comp,
-         model, tooltip, work, huds,
+         model, huds,
          window_title='Vtk-Vismach', window_width=600, window_height=300,
          camera_azimuth=-50, camera_elevation=30,
          background_rgb = (0.2, 0.3, 0.4)):
@@ -1096,7 +1097,22 @@ def main(argv_options, comp,
     vcomp.newpin('plotclear',hal.HAL_BIT,hal.HAL_IN)
     vcomp.ready()
     # create the backplot to be added to the renderer
-    backplot = Plotter(vcomp, work, tooltip, 'plotclear')
+    def get_tracker(objects):
+        for item in objects.GetParts():
+            global tool_tracker, work_tracker
+            if hasattr(item, 'GetProperty'):
+                if item.GetProperty().GetObjectName() == 'tool':
+                    print('found tool_tracker')
+                    tool_tracker = item
+                if item.GetProperty().GetObjectName() == 'work':
+                    print('found work_tracker')
+                    work_tracker = item
+            if isinstance(item, vtk.vtkAssembly):
+                get_tracker(item)
+    # Update model
+    global tool_tracker, work_tracker
+    get_tracker(model)
+    backplot = Plotter(vcomp, work_tracker, tool_tracker, 'plotclear')
     # Event loop to periodically update the model
     def update():
         def get_actors_to_update(objects):

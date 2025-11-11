@@ -128,7 +128,7 @@ machine_coords = Translate([machine_coords], machine_zero_x, 0, machine_zero_z)
 
 # start toolside
 # Create the tooltip tracker (tool control point)
-tooltip = Capture()
+tooltip = Capture('tool')
 # Create an indicator for the tool coordinate system in IDENTITY mode
 tool_coords_idt = Scale([Axes(100)],hal,0,'motion.switchkins-type',1,0)
 tool_coords_idt = Translate([tool_coords_idt],hal,0,0,('motion.tooloffset.z',-1))
@@ -204,7 +204,7 @@ spindle_xz = Translate([spindle_xz], machine_zero_x, 0, 0)
 
 # start workside
 # Create the work tracker (top center of the rotary table)
-work = Capture()
+work = Capture('work')
 # Create an indicator for the work coordinates
 work_axes = Axes(100)
 # TWP Matrix
@@ -332,4 +332,4 @@ myhud2.add_pin('{:6.3f}        {:6.3f}',c,['twp_xz','twp_zz'])
 myhud2.extra_text_enable = True
 #/hud
 
-main(options, c, model, tooltip, work, huds=[myhud,myhud2], window_width=1400, window_height=1000, window_title = 'Vtk_Vismach Tutorial')
+main(options, c, model, huds=[myhud,myhud2], window_width=1400, window_height=1000, window_title = 'Vtk_Vismach Tutorial')
