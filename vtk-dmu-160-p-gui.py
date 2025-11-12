@@ -236,9 +236,7 @@ g92 = Translate([g92],c,'twp_ox_world','twp_oy_world','twp_oz_world')
 g92_idt = Scale([g92],hal,0,'motion.switchkins-type',1,0)
 g92_tcp = Scale([g92],hal,1,'motion.switchkins-type',1,0)
 # Create geometry for the work piece
-work_piece = Box(600,600,600).set_group('work')
-#work_piece.set_group('work')
-work_piece = Translate([work_piece],0,0,300)
+work_piece = Translate([Box(600,600,600)],0,0,300).set_group('work')
 # Create rotary table
 EGO_C = Color([EGO_C],0.1,0.7,0.9,1)
 rotary_table_c = Collection([
@@ -260,7 +258,7 @@ table = Collection([
         ])
 # Table moves with y axis
 #table = HalTranslate_orig([table],c,'axis_y',0,-1,0)
-table = Translate([table],hal,0,('joint.1.pos-fb',-1),0)
+table = Translate([table],hal,0,('joint.1.pos-fb',-1),0).set_group('table')
 # move table to y-home position
 table = Translate([table], 0, -machine_zero_y, 0)
 #/work-side

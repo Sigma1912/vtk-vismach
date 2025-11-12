@@ -14,6 +14,7 @@ from PyQt5.QtCore import QTimer
 
 class ArgsBase(object):
     def __init__(self, *args):
+        self.stored_scale = None
         self.group = None
         if isinstance(args[0], list): # an object manipulator is being created (ie the first argument is [parts])
             has_parts = True # used to adjust number of expected arguments
@@ -111,6 +112,15 @@ class ArgsBase(object):
         self.group = group
         # we need to return self so we can call 'set_group()' and initialize the class in one line
         return self
+
+    def store_scale(self):
+        if self.GetScale() != (0,0,0):
+            self.stored_scale = self.GetScale()
+
+    def restore_scale(self):
+        if self.stored_scale:
+            self.SetScale(*self.stored_scale)
+
 
 # Creates a box centered on the origin
 # Either specify the width in X and Y, and the height in Z
@@ -1201,12 +1211,14 @@ def main(argv_options, comp, model, huds=None,
                 for group in model_groups.groups_in_model.keys():
                     for checkbox in mainWindow.checkboxes_group:
                         if checkbox.objectName() == group:
+                            # SetVisibility does not seem to work on modifier objects so we use Scale
                             if checkbox.isChecked():
                                 for item in model_groups.groups_in_model[group]:
-                                    item.VisibilityOn()
+                                    item.restore_scale()
                             else:
                                 for item in model_groups.groups_in_model[group]:
-                                    item.VisibilityOff()
+                                    item.store_scale()
+                                    item.SetScale(0,0,0)
                 mainWindow.groups_checkbox_clicked = False
             # Update camera tracking
             if mainWindow.trackTool or mainWindow.trackWork:
