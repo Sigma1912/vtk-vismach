@@ -14,6 +14,7 @@ from PyQt5.QtCore import QTimer
 
 class ArgsBase(object):
     def __init__(self, *args):
+        self.group = None
         if isinstance(args[0], list): # an object manipulator is being created (ie the first argument is [parts])
             has_parts = True # used to adjust number of expected arguments
             parts = args[0]
@@ -106,6 +107,10 @@ class ArgsBase(object):
                 for tracked_part in self.tracked_parts:
                     tracked_part.GetUserTransform().Concatenate(self.transformation)
 
+    def set_group(self, group):
+        self.group = group
+        # we need to return self so we can call 'set_group()' and initialize the class in one line
+        return self
 
 # Creates a box centered on the origin
 # Either specify the width in X and Y, and the height in Z
@@ -714,7 +719,8 @@ class _Plotter(vtk.vtkActor):
         self.color = color          # color of backplot in eiter nomalized RGB or one of vtkNamedColors
         self.tool_tracker = None    # Capture object with '.matrix' holding the current transformation tool->world
         self.work_tracker = None    # Capture object with '.matrix' holding the current transformation work->world
-        self.get_tracker(model)     # find the Capture('tool') and Capture('work') objects in the model
+        self.tool2work = vtk.vtkTransform()
+        self.get_trackers(model)     # find the Capture('tool') and Capture('work') objects in the model
         if not self.tool_tracker:
             self.ready = False
             print("Backplot Error: Unable to find the Capture('tool') object in the model")
@@ -729,16 +735,15 @@ class _Plotter(vtk.vtkActor):
         self.setup_points([0,0,0])
         self.initial_run = True
 
-    def get_tracker(self, objects):
+    def get_trackers(self, objects):
         for item in objects.GetParts():
-            #global tool_tracker, work_tracker
             if hasattr(item, 'GetProperty'):
                 if item.GetProperty().GetObjectName() == 'tool':
                     self.tool_tracker = item
                 if item.GetProperty().GetObjectName() == 'work':
                     self.work_tracker = item
             if isinstance(item, vtk.vtkAssembly):
-                self.get_tracker(item)
+                self.get_trackers(item)
 
     def setup_points(self, pos):
         self.index = 0
@@ -923,8 +928,26 @@ class Hud(vtk.vtkActor2D):
         self.textMapper.SetInput(combined_string)
 
 
+class ModelGroups(object):
+    def __init__(self, model):
+        self.groups_in_model = {}
+        self.get_groups(model)
+        self.has_groups = len(self.groups_in_model.keys()) > 0
+
+    def get_groups(self, objects):
+        for item in objects.GetParts():
+            if hasattr(item, 'group'):
+                if item.group:
+                    if item.group in self.groups_in_model.keys():
+                        self.groups_in_model[item.group].append(item)
+                    else:
+                        self.groups_in_model[item.group] = [item]
+            if isinstance(item, vtk.vtkAssembly):
+                self.get_groups(item)
+
+
 class MainWindow(Qt.QMainWindow):
-    def __init__(self, width, height, title, argv_options, backplot, huds):
+    def __init__(self, width, height, title, argv_options, backplot, huds, model_groups):
         super().__init__()
         self.resize(width, height)
         self.setWindowTitle(title)
@@ -935,6 +958,7 @@ class MainWindow(Qt.QMainWindow):
         self.trackWork = False
         self.last_tracking_position = (0,0,0)
         self.no_buttons = False
+        self.groups_checkbox_clicked = False
         if '--no-buttons' in argv_options:
             self.no_buttons = True
             print('VISMACH: Window without buttons requested')
@@ -1016,6 +1040,19 @@ class MainWindow(Qt.QMainWindow):
                 self.rbtnHud = QtWidgets.QRadioButton("Show Overlay")
                 self.rbtnHud.setChecked(True)
                 sdePnlLyt.addWidget(self.rbtnHud)
+            if len(model_groups.groups_in_model.keys()) > 0:
+                grpGrpLyt = QtWidgets.QVBoxLayout()
+                self.checkboxes_group =  []
+                for group in model_groups.groups_in_model.keys():
+                    self.ckbxGrp = QtWidgets.QCheckBox("Show " + group)
+                    self.ckbxGrp.setObjectName(group)
+                    self.ckbxGrp.setChecked(True)
+                    self.ckbxGrp.clicked.connect(self.ckbxGrp_clicked)
+                    self.checkboxes_group.append(self.ckbxGrp)
+                    grpGrpLyt.addWidget(self.ckbxGrp)
+                grpGrp = QtWidgets.QGroupBox("Model Groups")
+                grpGrp.setLayout(grpGrpLyt)
+                sdePnlLyt.addWidget(grpGrp)
             sdePnlLyt.addStretch()
             # VTK Interactor (this is where the model is going to be)
             self.vtkInteractor = QVTKRenderWindowInteractor(self)
@@ -1109,6 +1146,8 @@ class MainWindow(Qt.QMainWindow):
     def btnClrPlot_clicked(self):
         self.backplot.initial_run = True
 
+    def ckbxGrp_clicked(self):
+        self.groups_checkbox_clicked = True
 
 
 def main(argv_options, comp, model, huds=None,
@@ -1116,11 +1155,6 @@ def main(argv_options, comp, model, huds=None,
          camera_azimuth=-50, camera_elevation=30,
          background_rgb = (0.2, 0.3, 0.4)):
 
-    vcomp = hal.component('vismach')
-    vcomp.newpin('plotclear',hal.HAL_BIT,hal.HAL_IN)
-    vcomp.ready()
-    # create the backplot to be added to the renderer
-    backplot = _Plotter(model, vcomp, 'plotclear')
     # Event loop to periodically update the model
     def update():
         def get_actors_to_update(objects):
@@ -1137,28 +1171,43 @@ def main(argv_options, comp, model, huds=None,
         get_actors_to_update(model)
         # Update backplot
         if backplot.ready:
+            # Update tool->world matrix
+            t2w = backplot.tool2work.GetMatrix()
+            r1=('{:6.3f} {:6.3f} {:6.3f} {:9.3f}'.format(t2w.GetElement(0,0), t2w.GetElement(0,1), t2w.GetElement(0,2), t2w.GetElement(0,3)))
+            r2=('{:6.3f} {:6.3f} {:6.3f} {:9.3f}'.format(t2w.GetElement(1,0), t2w.GetElement(1,1), t2w.GetElement(1,2), t2w.GetElement(1,3)))
+            r3=('{:6.3f} {:6.3f} {:6.3f} {:9.3f}'.format(t2w.GetElement(2,0), t2w.GetElement(2,1), t2w.GetElement(2,2), t2w.GetElement(2,3)))
+            t2w_matrix_text = '\nTool -> Work Transformation:\n'+'   X      Y      Z      Pos\n'+r1+'\n'+r2+'\n'+r3
             backplot.update()
+        else:
+            t2w_matrix_text = ''
+            backplot.update()
+        # Update HUD
+        if huds:
+            for hud in huds:
+                hud.extra_text = t2w_matrix_text
+                hud.update()
+        # With the sidepanel we have some more things to update depending on the button states
         if not mainWindow.no_buttons:
-            if backplot.ready:
-                # Update tool->world matrix
-                t2w = backplot.tool2work.GetMatrix()
-                r1=('{:6.3f} {:6.3f} {:6.3f} {:9.3f}'.format(t2w.GetElement(0,0), t2w.GetElement(0,1), t2w.GetElement(0,2), t2w.GetElement(0,3)))
-                r2=('{:6.3f} {:6.3f} {:6.3f} {:9.3f}'.format(t2w.GetElement(1,0), t2w.GetElement(1,1), t2w.GetElement(1,2), t2w.GetElement(1,3)))
-                r3=('{:6.3f} {:6.3f} {:6.3f} {:9.3f}'.format(t2w.GetElement(2,0), t2w.GetElement(2,1), t2w.GetElement(2,2), t2w.GetElement(2,3)))
-                t2w_matrix_text = '\nTool -> Work Transformation:\n'+'   X      Y      Z      Pos\n'+r1+'\n'+r2+'\n'+r3
-            else:
-                t2w_matrix_text = ''
-            # Update HUD
+            # Update HUD visibility
             if huds:
                 if mainWindow.rbtnHud.isChecked():
-                    renderer = mainWindow.vtkInteractor.GetRenderWindow().GetRenderers().GetFirstRenderer()
                     for hud in huds:
-                        hud.extra_text = t2w_matrix_text
-                        hud.update()
                         hud.VisibilityOn()
                 else:
                     for hud in huds:
                         hud.VisibilityOff()
+            # See if we need to update model group visibility
+            if mainWindow.groups_checkbox_clicked:
+                for group in model_groups.groups_in_model.keys():
+                    for checkbox in mainWindow.checkboxes_group:
+                        if checkbox.objectName() == group:
+                            if checkbox.isChecked():
+                                for item in model_groups.groups_in_model[group]:
+                                    item.VisibilityOn()
+                            else:
+                                for item in model_groups.groups_in_model[group]:
+                                    item.VisibilityOff()
+                mainWindow.groups_checkbox_clicked = False
             # Update camera tracking
             if mainWindow.trackTool or  mainWindow.trackWork:
                 renderer = mainWindow.vtkInteractor.GetRenderWindow().GetRenderers().GetFirstRenderer()
@@ -1166,9 +1215,9 @@ def main(argv_options, comp, model, huds=None,
                 fp = camera.GetFocalPoint()
                 cp = camera.GetPosition()
                 if mainWindow.trackTool:
-                    matrix = tooltip.current_matrix
+                    matrix = backplot.tool_tracker.current_matrix
                 else:
-                    matrix = work.current_matrix
+                    matrix = backplot.work_tracker.current_matrix
                 x, y, z = matrix.GetElement(0,3), matrix.GetElement(1,3), matrix.GetElement(2,3)
                 xl,yl,zl = mainWindow.last_tracking_position
                 camera.SetFocalPoint(fp[0] + x - xl, fp[1] + y - yl, fp[2] + z - zl)
@@ -1177,6 +1226,13 @@ def main(argv_options, comp, model, huds=None,
         # Render updated data
         mainWindow.vtkInteractor.GetRenderWindow().Render()
 
+    vcomp = hal.component('vismach')
+    vcomp.newpin('plotclear',hal.HAL_BIT,hal.HAL_IN)
+    vcomp.ready()
+    # create the backplot to be added to the renderer
+    backplot = _Plotter(model, vcomp, 'plotclear')
+    # collect group tags
+    model_groups = ModelGroups(model)
     # close vismach if linuxcnc is closed
     def quit(*args):
         raise SystemExit
@@ -1196,7 +1252,11 @@ def main(argv_options, comp, model, huds=None,
     else:
         app = Qt.QApplication([])
     # Qt Window
-    mainWindow = MainWindow(window_width, window_height, window_title, argv_options, backplot, huds)
+    mainWindow = MainWindow(window_width, window_height, window_title,
+                            argv_options,
+                            backplot,
+                            huds,
+                            model_groups)
     # A renderer
     renderer = vtk.vtkRenderer()
     renderer.AddActor(model)
