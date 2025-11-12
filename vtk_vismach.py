@@ -924,7 +924,7 @@ class Hud(vtk.vtkActor2D):
 
 
 class MainWindow(Qt.QMainWindow):
-    def __init__(self, width, height, title, argv_options, backplot):
+    def __init__(self, width, height, title, argv_options, backplot, huds):
         super().__init__()
         self.resize(width, height)
         self.setWindowTitle(title)
@@ -1012,9 +1012,10 @@ class MainWindow(Qt.QMainWindow):
                 self.btnClrPlot.setText('Clear Backplot')
                 self.btnClrPlot.clicked.connect(self.btnClrPlot_clicked)
                 sdePnlLyt.addWidget(self.btnClrPlot)
-            self.rbtnHud = QtWidgets.QRadioButton("Show Overlay")
-            self.rbtnHud.setChecked(True)
-            sdePnlLyt.addWidget(self.rbtnHud)
+            if huds:
+                self.rbtnHud = QtWidgets.QRadioButton("Show Overlay")
+                self.rbtnHud.setChecked(True)
+                sdePnlLyt.addWidget(self.rbtnHud)
             sdePnlLyt.addStretch()
             # VTK Interactor (this is where the model is going to be)
             self.vtkInteractor = QVTKRenderWindowInteractor(self)
@@ -1110,7 +1111,7 @@ class MainWindow(Qt.QMainWindow):
 
 
 
-def main(argv_options, comp, model, huds,
+def main(argv_options, comp, model, huds=None,
          window_title='Vtk-Vismach', window_width=600, window_height=300,
          camera_azimuth=-50, camera_elevation=30,
          background_rgb = (0.2, 0.3, 0.4)):
@@ -1148,15 +1149,16 @@ def main(argv_options, comp, model, huds,
             else:
                 t2w_matrix_text = ''
             # Update HUD
-            if mainWindow.rbtnHud.isChecked():
-                renderer = mainWindow.vtkInteractor.GetRenderWindow().GetRenderers().GetFirstRenderer()
-                for hud in huds:
-                    hud.extra_text = t2w_matrix_text
-                    hud.update()
-                    hud.VisibilityOn()
-            else:
-                for hud in huds:
-                    hud.VisibilityOff()
+            if huds:
+                if mainWindow.rbtnHud.isChecked():
+                    renderer = mainWindow.vtkInteractor.GetRenderWindow().GetRenderers().GetFirstRenderer()
+                    for hud in huds:
+                        hud.extra_text = t2w_matrix_text
+                        hud.update()
+                        hud.VisibilityOn()
+                else:
+                    for hud in huds:
+                        hud.VisibilityOff()
             # Update camera tracking
             if mainWindow.trackTool or  mainWindow.trackWork:
                 renderer = mainWindow.vtkInteractor.GetRenderWindow().GetRenderers().GetFirstRenderer()
@@ -1194,7 +1196,7 @@ def main(argv_options, comp, model, huds,
     else:
         app = Qt.QApplication([])
     # Qt Window
-    mainWindow = MainWindow(window_width, window_height, window_title, argv_options, backplot)
+    mainWindow = MainWindow(window_width, window_height, window_title, argv_options, backplot, huds)
     # A renderer
     renderer = vtk.vtkRenderer()
     renderer.AddActor(model)
