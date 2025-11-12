@@ -1196,7 +1196,7 @@ def main(argv_options, comp, model, huds=None,
                 else:
                     for hud in huds:
                         hud.VisibilityOff()
-            # See if we need to update model group visibility
+            # Update model group visibility
             if mainWindow.groups_checkbox_clicked:
                 for group in model_groups.groups_in_model.keys():
                     for checkbox in mainWindow.checkboxes_group:
@@ -1209,7 +1209,7 @@ def main(argv_options, comp, model, huds=None,
                                     item.VisibilityOff()
                 mainWindow.groups_checkbox_clicked = False
             # Update camera tracking
-            if mainWindow.trackTool or  mainWindow.trackWork:
+            if mainWindow.trackTool or mainWindow.trackWork:
                 renderer = mainWindow.vtkInteractor.GetRenderWindow().GetRenderers().GetFirstRenderer()
                 camera = renderer.GetActiveCamera()
                 fp = camera.GetFocalPoint()

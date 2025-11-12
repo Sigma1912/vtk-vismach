@@ -30,7 +30,7 @@ Using Local and global halpins:
         - Only one type of halpin (ie either all global or all local) can be used in the same constructor.
 
 
-Object constructors:
+Model objects:
     Box()
         Box((comp),x1, y1, z1, x2, y2, z2)
         Box((comp),xw, yw, zw)
@@ -57,7 +57,18 @@ Object constructors:
                 ReadPolyData(hal,"halui.tool.number", path_tool_stl)
 
 
-Object manipulator constructors:
+Model groups:
+    Each object of a model can optionally be assigned to a group. The assignment method can be called
+    on an existing object (2 lines of code)
+       example: 'work_piece = Box(600,600,600)'
+                'work_piece.set_group('work')'
+    or the object can be created and the 'set_group' method called in one line.
+       example2: 'ReadPolyData('work_piece.stl', path_stl).set_group('work')'
+    Vismach will automatically create a checkbutton to show or hide each group used in the model.
+
+
+
+Object manipulators:
     Collection([parts])
     Translate([parts], (comp), x, y, z)
     Rotate([parts], (comp), th, x, y, z)
@@ -71,6 +82,7 @@ Object manipulator constructors:
         # Orientation vector Y is the cross product of the X and Z vectors: (zx,zy,zz) x (xx,xy,xz)
     Scale([parts], (comp), const, var, scalefactor_if_true, scalefactor_if_false)
         # Checks if 'const' or Any item in 'const' == 'var' and applies the scalefactor given if true or false
+        # This can be used to show or hide objects using scalefactors '1' and '0'
     Color()
         Color([parts], (comp), vtk_color, opacity)
             example:  Color([arrow_x], 'red', 1)
@@ -114,20 +126,19 @@ Textoverlay (HUD) constructor:
             myhud2 = Hud(c,'kinstype_select',2,'tomato', 0.4) # This is displayed when 'kinstype_select' is 2
 
 
-Capturing tooltip and work_
+Capturing tooltip and work
     To record and display a backplot for the toolpath we need to embed two invisible objects into the model tree
-    'tooltip = Capture()' attached to the tooltip position will track the transformation matrix of the tool
-    'work = Capture()' does the same for the work piece.
-
+    'Capture('tool')' attached to the tooltip position will track the transformation matrix of the tool
+    'Capture('work')' does the same for the work piece.
+        # No backplot will be shown if either of these objects are missing in the model tree.
 
 
 Arguments calling main function for model construction:
     Example:
             main(options,   # options passed as arguments when starting vismach
                  c,         # name of hal.component instance used in the model
-                 model,     # collection of all parts in the model tree, ie 'model = Collection([.....])'
-                 tooltip,   # the Capture object attached to the tooltip, ie 'tooltip = Capture()'
-                 work,      # the Capture object attached to the work, ie 'work = Capture()'
+                 model,     # collection of all parts in the model tree
+                            # ie 'model = Collection([.....])'
                  huds=[myhud1,myhud2],                      # optional text overlays
                  window_width=1400, window_height=1000,     # optional window size
                  window_title = 'Vtk_Vismach Tutorial')     # optional window_title
