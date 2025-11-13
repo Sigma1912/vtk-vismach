@@ -676,18 +676,22 @@ class RotateEuler(ArgsBase,vtk.vtkAssembly):
 # using the optional arguments for scalefactors when true or false
 class Scale(ArgsBase,vtk.vtkAssembly):
     def get_expected_args(self):
-        return ('[parts]','(comp)','const','var','scalefactor_if_true','scalefactor_if_false')
+        return [('[parts]','(comp)','scale_x','scale_y','scale_z'),('[parts]','(comp)','const','var','scalefactor_if_true','scalefactor_if_false')]
 
     def update(self):
         if self.needs_updates or self.first_update:
             self.first_update = False
-            const, var, s_t, s_f = self.coords()
-            if not isinstance(const, list):
-                const = [const]
-            if var in const:
-                self.SetScale(s_t,s_t,s_t)
+            args = self.coords()
+            if len(args) == 3:
+                self.SetScale(*args)
             else:
-                self.SetScale(s_f,s_f,s_f)
+                const, var, s_t, s_f = args
+                if not isinstance(const, list):
+                    const = [const]
+                if var in const:
+                    self.SetScale(s_t,s_t,s_t)
+                else:
+                    self.SetScale(s_f,s_f,s_f)
 
 
 # creates a transformaation matrix from given X and Z orientation and a translation vector

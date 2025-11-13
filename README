@@ -80,9 +80,12 @@ Object manipulators:
                       [ xz, yz, zz, pz],
                       [  0,  0,  0,  1]]
         # Orientation vector Y is the cross product of the X and Z vectors: (zx,zy,zz) x (xx,xy,xz)
-    Scale([parts], (comp), const, var, scalefactor_if_true, scalefactor_if_false)
-        # Checks if 'const' or Any item in 'const' == 'var' and applies the scalefactor given if true or false
-        # This can be used to show or hide objects using scalefactors '1' and '0'
+    Scale()
+        Scale([parts],scale_x, scale_y, scale_z)
+        Scale([parts], (comp), const, var, scalefactor_if_true, scalefactor_if_false)
+            # Checks if 'const' or Any item in 'const' == 'var' and applies the scalefactor given if true or false
+            # This can be used to show or hide objects using scalefactors '1' and '0'
+                example: 'work_plane = Scale([work_plane],c,True,'twp_active',1,0)'
     Color()
         Color([parts], (comp), vtk_color, opacity)
             example:  Color([arrow_x], 'red', 1)
