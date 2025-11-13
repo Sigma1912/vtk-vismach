@@ -955,6 +955,19 @@ class ModelGroups(object):
             if isinstance(item, vtk.vtkAssembly):
                 self.get_groups(item)
 
+    def update(self, checkboxes):
+        # SetVisibility does not seem to work on modifier objects so we use Scale
+        for group in self.groups_in_model.keys():
+            for checkbox in checkboxes:
+                if checkbox.objectName() == group:
+                    if checkbox.isChecked():
+                        for item in self.groups_in_model[group]:
+                            item.restore_scale()
+                    else:
+                        for item in self.groups_in_model[group]:
+                            item.store_scale()
+                            item.SetScale(0,0,0)
+
 
 class MainWindow(Qt.QMainWindow):
     def __init__(self, width, height, title, argv_options, backplot, huds, model_groups):
@@ -1208,21 +1221,12 @@ def main(argv_options, comp, model, huds=None,
                         hud.VisibilityOff()
             # Update model group visibility
             if mainWindow.groups_checkbox_clicked:
-                for group in model_groups.groups_in_model.keys():
-                    for checkbox in mainWindow.checkboxes_group:
-                        if checkbox.objectName() == group:
-                            # SetVisibility does not seem to work on modifier objects so we use Scale
-                            if checkbox.isChecked():
-                                for item in model_groups.groups_in_model[group]:
-                                    item.restore_scale()
-                            else:
-                                for item in model_groups.groups_in_model[group]:
-                                    item.store_scale()
-                                    item.SetScale(0,0,0)
+                model_groups.update(mainWindow.checkboxes_group)
                 mainWindow.groups_checkbox_clicked = False
             # Update camera tracking
             if mainWindow.trackTool or mainWindow.trackWork:
-                renderer = mainWindow.vtkInteractor.GetRenderWindow().GetRenderers().GetFirstRenderer()
+                renderWindow = mainWindow.vtkInteractor.GetRenderWindow()
+                renderer = renderWindow.GetRenderers().GetFirstRenderer()
                 camera = renderer.GetActiveCamera()
                 fp = camera.GetFocalPoint()
                 cp = camera.GetPosition()
