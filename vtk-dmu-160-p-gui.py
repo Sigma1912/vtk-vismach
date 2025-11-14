@@ -258,7 +258,7 @@ table = Collection([
         ])
 # Table moves with y axis
 #table = HalTranslate_orig([table],c,'axis_y',0,-1,0)
-table = Translate([table],hal,0,('joint.1.pos-fb',-1),0).set_group('table')
+table = Translate([table],hal,0,('joint.1.pos-fb',-1),0,'halui.flood.is-on').set_group('table')
 # move table to y-home position
 table = Translate([table], 0, -machine_zero_y, 0)
 #/work-side

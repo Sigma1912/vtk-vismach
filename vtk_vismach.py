@@ -526,13 +526,21 @@ class Grid(ArgsBase,vtk.vtkAssembly):
 
 class Translate(ArgsBase,vtk.vtkAssembly):
     def get_expected_args(self):
-        return ('[parts]','(comp)','x','y','z')
+        return [('[parts]','(comp)','x','y','z'),('[parts]','(comp)','x','y','z','vel_mode')]
 
     def update(self):
         if self.needs_updates or self.first_update:
+            args = self.coords()
+            if len(args) == 3:
+                x,y,z = args
+                self.transformation = vtk.vtkTransform()
+            else:
+                x,y,z,vel_mode = args
+                if self.first_update:
+                    self.transformation = vtk.vtkTransform()
+                if not vel_mode:
+                    self.transformation = vtk.vtkTransform()
             self.first_update = False
-            x,y,z = self.coords()
-            self.transformation = vtk.vtkTransform()
             self.transformation.Translate(x,y,z)
 
     def transform(self):
@@ -541,13 +549,19 @@ class Translate(ArgsBase,vtk.vtkAssembly):
 
 class Rotate(ArgsBase,vtk.vtkAssembly):
     def get_expected_args(self):
-        return ('[parts]','(comp)','th','x','y','z')
+        return [('[parts]','(comp)','th','x','y','z'),('[parts]','(comp)','th','x','y','z','vel_mode')]
 
     def update(self):
         if self.needs_updates or self.first_update:
+            args = self.coords()
+            if len(args) == 4:
+                th,x,y,z = args
+                vel_mode = False
+            else:
+                th,x,y,z,vel_mode = args
+            if not vel_mode or (vel_mode and self.first_update):
+                self.transformation = vtk.vtkTransform()
             self.first_update = False
-            th,x,y,z = self.coords()
-            self.transformation = vtk.vtkTransform()
             self.transformation.PreMultiply()
             self.transformation.RotateWXYZ(th,x,y,z)
 
