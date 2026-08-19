@@ -5,6 +5,8 @@
 import hal, signal
 import vtk
 import os
+import sys
+from math import *
 
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 from PyQt5 import Qt, QtWidgets
@@ -31,13 +33,21 @@ class ArgsBase(object):
         else: # an object creator is being created (ie the first argument is NOT [parts])
             has_parts = False # used to adjust the number of expected arguments
         # parse args
-        if args and (isinstance(args[0], hal.component) or isinstance(args[0],type(hal))): #halpin passed
-            self.comp = args[0]
-            args = args[1:]
-            self.needs_updates = True
-        else:  # no halpin passed
-            self.comp = None
+        if args:
+            self.pin_prefix = None
             self.needs_updates = False
+            if isinstance(args[0], type(hal)) or isinstance(args[0], hal.component):
+                if isinstance(args[0], hal.component): # component instance passed
+                    self.pin_prefix = args[0].getprefix()
+                else: # hal instance passed
+                    self.pin_prefix = args[0]
+                args = args[1:] # remove the comp item from the args list
+                self.needs_updates = True
+            elif isinstance(args[0], str):
+                if hal.component_is_ready(args[0]): # component prefix passed
+                    self.pin_prefix = args[0]
+                    args = args[1:] # remove the comp item from the args list
+                    self.needs_updates = True
         # check number of arguments against expected number, need to adjust for '[parts]' and '(comp)'
         args_count = len(args) + has_parts + 1
         if hasattr(self, 'get_expected_args'):
@@ -66,41 +76,39 @@ class ArgsBase(object):
         return list(map(self._coord, self._coords))
 
     def _coord(self, v):
-        s = 1 # default scale factor
-        if isinstance(v,tuple):
-            # tuple syntax has been used, ie (<halpin_name>, scalefactor)
-            tup = v
-            v = tup[0]
-            s = tup[1]
-        if isinstance(v, str) and isinstance(self.comp, hal.component):
-            # comp = 'c' passed (ie string value might be a local halpin name)
-            if os.path.isdir(v): # Needed for ReadPolyData()
-                # string is a path (eg for ReadPolyData())
-                return v
+        def parse_expression(v):
+            def get_pin_value(v):
+                if  isinstance(self.pin_prefix, type(hal)):
+                    return hal.get_value(v)
+                elif  isinstance(v, str) and hal.component_is_ready(self.pin_prefix):
+                    return hal.get_value(self.pin_prefix + '.' + v)
             try:
-                # if the string is a local halpin name we will get a nummeric value that can be scaled
-                return s*self.comp[v]
-            except Exception as e:
-                # if that fails we return the string as we got it (eg 'x' for Axes())
-                return v
-        elif isinstance(v, str) and isinstance(self.comp,type(hal)):
-            # comp = 'hal' passed (ie string value might be a global halpin name)
-            if os.path.isdir(v):
-                # string is a path (eg for ReadPolyData())
-                return v
+                return get_pin_value(v)
+            except Exception as e: # we have something other than a simple halpin
+                pass
             try:
-                # if the string is a global halpin name we will get a nummeric value that can be scaled
-                return s*hal.get_value(v)
+                # Split the expression string and extract parts between curly brackets
+                parts = v.split("{")
+                res = [p.split("}")[0] for p in parts if "}" in p]
+                # get hal values for the extracted pins
+                vals = [str(get_pin_value(r)) for r in res]
+                # insert the values into the expression string
+                for i in range(len(res)):
+                    v = v.replace(('{'+res[i])+'}', vals[i])
+                return eval(v)
             except Exception as e:
-                # if that fails we return the string as we got it (eg 'x' for Axes())
+                print("Cannot evaluate expression %s, Error: %s" % (v ,e))
+                sys.exit()
+
+        if self.pin_prefix and (isinstance(v, str) or v == None):
+            if not v: # for Color() to set opacity
                 return v
-        else:
-            # no comp passed (ie none of the values are halpin names)
-            if isinstance(v,str) or v == None:
-                # eg a string filename from 'ReadPolyData()' or None for Color() to set opacity
+            elif os.path.isdir(v): # filename from 'ReadPolyData()
                 return v
-            # contant nummeric value
-            return s*v
+            else: # we got some string that either IS or contains halpin(s)
+                return parse_expression(v)
+        else: # no comp argument passed so we do not have to expect any halpins so we just pass on what we got
+            return v
 
     def capture(self):
         if hasattr(self, 'tracked_parts'):
@@ -127,7 +135,8 @@ class ArgsBase(object):
 # or specify the two points across the diagonal
 class Box(ArgsBase, vtk.vtkActor):
     def get_expected_args(self):
-        return [('(comp)','x1', 'y1', 'z1', 'x2', 'y2', 'z2'),('(comp)','xw', 'yw', 'zw')]
+        return [('(comp)','x1', 'y1', 'z1', 'x2', 'y2', 'z2'),
+                ('(comp)','xw', 'yw', 'zw')]
 
     def create(self, *args):
         self.cube = vtk.vtkCubeSource()
@@ -145,7 +154,7 @@ class Box(ArgsBase, vtk.vtkActor):
                 self.cube.SetYLength(yw)
                 self.cube.SetZLength(zw)
                 self.cube.Update()
-            if len(dims) == 6:
+            elif len(dims) == 6:
                 x1, y1, z1, x2, y2, z2 = self.coords()
                 if x1 > x2:
                     tmp = x1
@@ -171,10 +180,12 @@ class Box(ArgsBase, vtk.vtkActor):
 # the box is centered on the origin
 class Sphere(ArgsBase, vtk.vtkActor):
     def get_expected_args(self):
-        return ('(comp)','x', 'y', 'z', 'r')
+        return [('(comp)','r'),('(comp)','x_cntr', 'y_cntr', 'z_cntr', 'r')]
 
     def create(self, *args):
         self.sphere = vtk.vtkSphereSource()
+        self.sphere.SetThetaResolution(50)
+        self.sphere.SetPhiResolution(50)
         mapper = vtk.vtkPolyDataMapper()
         mapper.SetInputData(self.sphere.GetOutput())
         self.SetMapper(mapper)
@@ -182,7 +193,12 @@ class Sphere(ArgsBase, vtk.vtkActor):
     def update(self):
         if self.needs_updates or self.first_update:
             self.first_update = False
-            x, y, z, r = self.coords()
+            dims = self.coords()
+            if not isinstance(dims, list):
+                r = self.coords()
+                (x,y,z) = (0,0,0)
+            elif len(dims) == 4:
+                x, y, z, r = self.coords()
             self.sphere.SetRadius(r)
             self.sphere.Update()
             self.SetPosition(x,y,z)
@@ -191,25 +207,34 @@ class Sphere(ArgsBase, vtk.vtkActor):
 # Create cylinder along Y axis (default direction for vtkCylinderSource)
 class CylinderY(ArgsBase, vtk.vtkActor):
     def get_expected_args(self):
-        return ('(comp)','length', 'radius')
+        return [('(comp)','length', 'radius'),('(comp)','x_cntr', 'y_cntr', 'z_cntr','length', 'radius')]
 
     def create(self, *args):
-        self.resolution = 10
         self.cylinder = vtk.vtkCylinderSource()
+        self.cylinder.SetResolution(50)
         self.mapper = vtk.vtkPolyDataMapper()
         self.mapper.SetInputData(self.cylinder.GetOutput())
         self.SetMapper(self.mapper)
 
+    def get_coords(self):
+        dims = self.coords()
+        if len(dims) == 2:
+            length, radius = self.coords()
+            x,y,z = 0,0,0
+        elif len(dims) == 5:
+            x, y, z, length, radius = self.coords()
+        return x,y,z,length,radius
+
     def update(self):
         if self.needs_updates or self.first_update:
             self.first_update = False
-            length, radius = self.coords()
+            x,y,z,length,radius = self.get_coords()
             self.cylinder.SetRadius(radius)
-            self.cylinder.SetHeight(length)
-            self.cylinder.SetResolution(self.resolution)
+            self.cylinder.SetHeight(abs(length))
             self.SetUserTransform(vtk.vtkTransform())
             self.GetUserTransform().Translate(0,length/2,0)
             self.cylinder.Update()
+            self.SetPosition(x,y,z)
 
 
 # Create cylinder along Z axis
@@ -221,12 +246,13 @@ class CylinderZ(CylinderY):
     def update(self):
         if self.needs_updates or self.first_update:
             self.first_update = False
-            length, radius = self.coords()
+            x,y,z,length,radius = self.get_coords()
             self.cylinder.SetRadius(radius)
-            self.cylinder.SetHeight(length)
+            self.cylinder.SetHeight(abs(length))
             self.SetUserTransform(vtk.vtkTransform())
             self.GetUserTransform().Translate(0,0,length/2)
             self.cylinder.Update()
+            self.SetPosition(x,y,z)
 
 
 # Create cylinder along X axis
@@ -238,12 +264,13 @@ class CylinderX(CylinderY):
     def update(self):
         if self.needs_updates or self.first_update:
             self.first_update = False
-            length, radius = self.coords()
+            x,y,z,length,radius = self.get_coords()
             self.cylinder.SetRadius(radius)
-            self.cylinder.SetHeight(length)
+            self.cylinder.SetHeight(abs(length))
             self.SetUserTransform(vtk.vtkTransform())
             self.GetUserTransform().Translate(length/2,0,0)
             self.cylinder.Update()
+            self.SetPosition(x,y,z)
 
 
 # draw a line from one point to another
@@ -493,8 +520,11 @@ class Axes(ArgsBase, vtk.vtkAssembly):
         if self.needs_updates or self.first_update:
             self.first_update = False
             scale = self.coords()
-            self.SetScale(scale,scale,scale)
-
+            try:
+                self.SetScale(scale,scale,scale)
+            except Exception as e:
+                print("Vismach Value Error: %s, in %s"%(str(self.coords()),e))
+                sys.exit()
 
 # draw a grid, use quad_size to define the size of a quadrant
 # As for why we are not using vtkRectilinearGrid() with wireframe for this see:
@@ -541,7 +571,12 @@ class Translate(ArgsBase,vtk.vtkAssembly):
                 if not vel_mode:
                     self.transformation = vtk.vtkTransform()
             self.first_update = False
-            self.transformation.Translate(x,y,z)
+            try:
+                self.transformation.Translate(x,y,z)
+            except Exception as e:
+                print("Vismach Value Error: %s, in %s"%(str(args),e))
+                sys.exit()
+
 
     def transform(self):
         self.SetUserTransform(self.transformation)
@@ -563,7 +598,11 @@ class Rotate(ArgsBase,vtk.vtkAssembly):
                 self.transformation = vtk.vtkTransform()
             self.first_update = False
             self.transformation.PreMultiply()
-            self.transformation.RotateWXYZ(th,x,y,z)
+            try:
+                self.transformation.RotateWXYZ(th,x,y,z)
+            except Exception as e:
+                print("Vismach Value Error: %s, in %s"%(str(args),e))
+                sys.exit()
 
     def transform(self):
         self.SetUserTransform(self.transformation)
@@ -601,6 +640,12 @@ class Color(ArgsBase,vtk.vtkAssembly):
             opacity_only = False
             if isinstance(args[0],str):  # ie (color, a) has been passed
                 color, opacity = args
+                try: # try to conver hex RGB to dec RGB
+                    h = color.lstrip('#')
+                    (r,g,b) = tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
+                    color = (r/255, g/255, b/255)
+                except Exception as e:
+                    pass
             elif args[0] == None: # None instead of color string passed
                 opacity = args[1]
                 opacity_only = True
@@ -702,10 +747,14 @@ class Scale(ArgsBase,vtk.vtkAssembly):
                 const, var, s_t, s_f = args
                 if not isinstance(const, list):
                     const = [const]
+            try:
                 if var in const:
                     self.SetScale(s_t,s_t,s_t)
                 else:
                     self.SetScale(s_f,s_f,s_f)
+            except Exception as e:
+                print("Vismach Value Error: %s, in %s"%(str(args),e))
+
 
 
 # creates a transformaation matrix from given X and Z orientation and a translation vector
@@ -725,30 +774,36 @@ class MatrixTransform(ArgsBase,vtk.vtkAssembly):
             vp = [px, py, pz]
             vx = [xx, xy, xz]
             vz = [zx, zy, zz]
-            # calculate the missing y vector
-            vy = [yx, yy, yz] = self.cross(vz,vx)
-            matrix = [[ xx, yx, zx, px],
-                      [ xy, yy, zy, py],
-                      [ xz, yz, zz, pz],
-                      [  0,  0,  0,  1]]
-            transform_matrix = vtk.vtkMatrix4x4()
-            for column in range (0,4):
-                for row in range (0,4):
-                    transform_matrix.SetElement(column, row, matrix[column][row])
-            self.SetUserMatrix(transform_matrix)
+            try:
+                # calculate the missing y vector
+                vy = [yx, yy, yz] = self.cross(vz,vx)
+                matrix = [[ xx, yx, zx, px],
+                        [ xy, yy, zy, py],
+                        [ xz, yz, zz, pz],
+                        [  0,  0,  0,  1]]
+                transform_matrix = vtk.vtkMatrix4x4()
+                for column in range (0,4):
+                    for row in range (0,4):
+                        transform_matrix.SetElement(column, row, matrix[column][row])
+                self.SetUserMatrix(transform_matrix)
+            except Exception as e:
+                print("Vismach Value Error: %s, in %s"%(str(self.coords()),e))
 
 
 # Finds the Capture('tool') and Capture('work') in a model and draws a polyline showing the path of 'tooltip' with respect to 'work'
 class _Plotter(vtk.vtkActor):
-    def __init__(self, model, comp, clear, color='magenta'):
+    def __init__(self, model, clearpin, color='magenta'):
         self.model = model          # machine model containing a least Capture('tool') and Capture('work') object
-        self.comp = comp            # instance of the halcomponent used in the model
-        self.clear = clear          # halpin that clears the backplot
+        self.clearpin = clearpin          # halpin that clears the backplot
         self.color = color          # color of backplot in eiter nomalized RGB or one of vtkNamedColors
         self.tool_tracker = None    # Capture object with '.matrix' holding the current transformation tool->world
         self.work_tracker = None    # Capture object with '.matrix' holding the current transformation work->world
-        self.tool2work = vtk.vtkTransform()
+        self.work2tool = vtk.vtkTransform()
         self.get_trackers(model)     # find the Capture('tool') and Capture('work') objects in the model
+        # We initialize at the origin, this is cleared and set to the actual
+        # machine reference position during the 1. update loop
+        self.setup_points([0,0,0])
+        self.initial_run = True
         if not self.tool_tracker:
             self.ready = False
             print("Backplot Error: Unable to find the Capture('tool') object in the model")
@@ -758,10 +813,6 @@ class _Plotter(vtk.vtkActor):
             print("Backplot Error: Unable to find the Capture('work') object in the model")
             return
         self.ready = True
-        # We initialize at the origin, this is cleared and set to the actual
-        # machine reference position during the 1. update loop
-        self.setup_points([0,0,0])
-        self.initial_run = True
 
     def get_trackers(self, objects):
         for item in objects.GetParts():
@@ -795,11 +846,13 @@ class _Plotter(vtk.vtkActor):
 
     def update(self):
         tool2world = vtk.vtkTransform()
-        tool2world.Concatenate(self.tool_tracker.current_matrix)
+        if self.tool_tracker is not None:
+            tool2world.Concatenate(self.tool_tracker.current_matrix)
         #world2tool = vtk.vtkTransform()
         #world2tool = tool2world.GetInverse()
         work2world = vtk.vtkTransform()
-        work2world.Concatenate(self.work_tracker.current_matrix)
+        if self.work_tracker is not None:
+            work2world.Concatenate(self.work_tracker.current_matrix)
         world2work = vtk.vtkTransform()
         world2work = work2world.GetInverse()
         plot_transform = vtk.vtkTransform()
@@ -809,7 +862,7 @@ class _Plotter(vtk.vtkActor):
         y = plot_transform.GetMatrix().GetElement(1,3)
         z = plot_transform.GetMatrix().GetElement(2,3)
         current_position = (x, y, z)
-        if self.comp[self.clear] or self.initial_run:
+        if hal.get_value(self.clearpin) or self.initial_run:
             self.points.Reset()
             self.setup_points([x,y,z])
             self.initial_run = False
@@ -822,10 +875,10 @@ class _Plotter(vtk.vtkActor):
         self.lines.Modified()
         self.SetUserTransform(vtk.vtkTransform())
         self.GetUserTransform().Concatenate(work2world)
-        # Calculate tool2work to experiment
-        self.tool2work = vtk.vtkTransform()
-        self.tool2work.Concatenate(world2work)
-        self.tool2work.Concatenate(tool2world) # tool position [0,0,0] > Work [x,y,z]
+        # Calculate work2tool to experiment
+        self.work2tool = vtk.vtkTransform()
+        self.work2tool.Concatenate(world2work)
+        self.work2tool.Concatenate(tool2world) # tool position [0,0,0] > Work [x,y,z]
 
 
 # create (invisible) actor that can be used to track combined transformation to world coordinates
@@ -988,7 +1041,7 @@ class ModelGroups(object):
 
 
 class MainWindow(Qt.QMainWindow):
-    def __init__(self, width, height, title, argv_options, backplot, huds, model_groups):
+    def __init__(self, width, height, title, argv_options, backplot, huds, guivars, model_groups, comp_prefix):
         super().__init__()
         self.resize(width, height)
         self.setWindowTitle(title)
@@ -1000,6 +1053,8 @@ class MainWindow(Qt.QMainWindow):
         self.last_tracking_position = (0,0,0)
         self.no_buttons = False
         self.groups_checkbox_clicked = False
+        self.comp_prefix = comp_prefix
+
         if '--no-buttons' in argv_options:
             self.no_buttons = True
             print('VISMACH: Window without buttons requested')
@@ -1053,34 +1108,73 @@ class MainWindow(Qt.QMainWindow):
             self.btnShowAll.setText('Show All')
             self.btnShowAll.clicked.connect(self.btnShowAll_clicked)
             sdePnlLyt.addWidget(self.btnShowAll)
-            # Camera tracking
-            grpTrkgLyt = QtWidgets.QVBoxLayout()
-            self.rbtnTrkg = QtWidgets.QRadioButton("None")
-            self.rbtnTrkg.setChecked(True)
-            self.rbtnTrkg.tracking = "None"
-            self.rbtnTrkg.toggled.connect(self.rbtnTrkg_clicked)
-            grpTrkgLyt.addWidget(self.rbtnTrkg)
-            self.rbtnTrkg = QtWidgets.QRadioButton("Tool")
-            self.rbtnTrkg.tracking = "Tool"
-            self.rbtnTrkg.toggled.connect(self.rbtnTrkg_clicked)
-            grpTrkgLyt.addWidget(self.rbtnTrkg)
-            self.rbtnTrkg = QtWidgets.QRadioButton("Work")
-            self.rbtnTrkg.tracking = "Work"
-            self.rbtnTrkg.toggled.connect(self.rbtnTrkg_clicked)
-            grpTrkgLyt.addWidget(self.rbtnTrkg)
-            grpTrkg = QtWidgets.QGroupBox("Tracking")
-            grpTrkg.setLayout(grpTrkgLyt)
-            sdePnlLyt.addWidget(grpTrkg)
+            # Spin boxes for ajustable values
+            if guivars:
+                def constructor(comp_prefix, pin):
+                    def func(val):
+                        try:
+                            hal.set_p(self.comp_prefix + '.' + pin, val)
+                        except Exception as e:
+                            print(e)
+                    return func
+                grpValSpinLyt = QtWidgets.QVBoxLayout()
+                pins_info = hal.get_info_pins()
+
+                for item in guivars:
+                    pin = item[0]
+                    for pin_info in pins_info:
+                        if pin_info["NAME"] == (self.comp_prefix + '.' + pin):
+                             if pin_info["DIRECTION"] == 16:
+                                grpValSpinRowLyt = QtWidgets.QHBoxLayout()
+                                pin = item[0]
+                                initval = item[3]
+                                self.spinLbl = QtWidgets.QLabel(pin)
+                                grpValSpinRowLyt.addWidget(self.spinLbl)
+                                self.spinVal = QtWidgets.QSpinBox()
+                                self.spinVal.setRange(item[1], item[2])
+                                self.spinVal.setValue(initval)
+                                pin_updater = constructor(self.comp_prefix, pin)
+                                pin_updater(initval)
+                                self.spinVal.valueChanged.connect(pin_updater)
+                                if len(item) > 4:
+                                    self.spinVal.setStyleSheet('background-color: ' + item[4] +';')
+                                grpValSpinRowLyt.addWidget(self.spinVal)
+                                grpValSpinLyt.addLayout(grpValSpinRowLyt)
+
+                grpValSpin = QtWidgets.QGroupBox("HAL Variables")
+                grpValSpin.setLayout(grpValSpinLyt)
+                sdePnlLyt.addWidget(grpValSpin)
+            # Camera tracking (relies on the tracking objects being found in the model)
+            if backplot.ready:
+                grpTrkgLyt = QtWidgets.QVBoxLayout()
+                self.rbtnTrkg = QtWidgets.QRadioButton("None")
+                self.rbtnTrkg.setChecked(True)
+                self.rbtnTrkg.tracking = "None"
+                self.rbtnTrkg.toggled.connect(self.rbtnTrkg_clicked)
+                grpTrkgLyt.addWidget(self.rbtnTrkg)
+                self.rbtnTrkg = QtWidgets.QRadioButton("Tool")
+                self.rbtnTrkg.tracking = "Tool"
+                self.rbtnTrkg.toggled.connect(self.rbtnTrkg_clicked)
+                grpTrkgLyt.addWidget(self.rbtnTrkg)
+                self.rbtnTrkg = QtWidgets.QRadioButton("Work")
+                self.rbtnTrkg.tracking = "Work"
+                self.rbtnTrkg.toggled.connect(self.rbtnTrkg_clicked)
+                grpTrkgLyt.addWidget(self.rbtnTrkg)
+                grpTrkg = QtWidgets.QGroupBox("Tracking")
+                grpTrkg.setLayout(grpTrkgLyt)
+                sdePnlLyt.addWidget(grpTrkg)
             # clear backplot
             if backplot.ready:
                 self.btnClrPlot = QtWidgets.QPushButton()
                 self.btnClrPlot.setText('Clear Backplot')
                 self.btnClrPlot.clicked.connect(self.btnClrPlot_clicked)
                 sdePnlLyt.addWidget(self.btnClrPlot)
+            # text overlays
             if huds:
                 self.rbtnHud = QtWidgets.QRadioButton("Show Overlay")
                 self.rbtnHud.setChecked(True)
                 sdePnlLyt.addWidget(self.rbtnHud)
+            # show/hide object groups
             if len(model_groups.groups_in_model.keys()) > 0:
                 grpGrpLyt = QtWidgets.QVBoxLayout()
                 self.checkboxes_group =  []
@@ -1191,10 +1285,18 @@ class MainWindow(Qt.QMainWindow):
         self.groups_checkbox_clicked = True
 
 
-def main(argv_options, comp, model, huds=None,
+def main(argv_options, comp, model, huds=None, guivars=None,
          window_title='Vtk-Vismach', window_width=600, window_height=300,
          camera_azimuth=-50, camera_elevation=30,
          background_rgb = (0.2, 0.3, 0.4)):
+
+    if isinstance(comp, hal.component): # comp instance passed
+        comp_prefix = comp.getprefix()
+    elif isinstance(comp, str):
+        if hal.component_is_ready(comp): # valid comp prefix passed
+            comp_prefix = comp
+    else:
+        print("Vismach Error: No valid component or component prefix passed.")
 
     # Event loop to periodically update the model
     def update():
@@ -1212,20 +1314,21 @@ def main(argv_options, comp, model, huds=None,
         get_actors_to_update(model)
         # Update backplot
         if backplot.ready:
-            # Update tool->world matrix
-            t2w = backplot.tool2work.GetMatrix()
-            r1=('{:6.3f} {:6.3f} {:6.3f} {:9.3f}'.format(t2w.GetElement(0,0), t2w.GetElement(0,1), t2w.GetElement(0,2), t2w.GetElement(0,3)))
-            r2=('{:6.3f} {:6.3f} {:6.3f} {:9.3f}'.format(t2w.GetElement(1,0), t2w.GetElement(1,1), t2w.GetElement(1,2), t2w.GetElement(1,3)))
-            r3=('{:6.3f} {:6.3f} {:6.3f} {:9.3f}'.format(t2w.GetElement(2,0), t2w.GetElement(2,1), t2w.GetElement(2,2), t2w.GetElement(2,3)))
-            t2w_matrix_text = '\nTool -> Work Transformation:\n'+'   X      Y      Z      Pos\n'+r1+'\n'+r2+'\n'+r3
+            # Update work->tool matrix
+            w2t = backplot.work2tool.GetMatrix()
+            r1=('{:6.3f} {:6.3f} {:6.3f} {:9.3f}'.format(w2t.GetElement(0,0), w2t.GetElement(0,1), w2t.GetElement(0,2), w2t.GetElement(0,3)))
+            r2=('{:6.3f} {:6.3f} {:6.3f} {:9.3f}'.format(w2t.GetElement(1,0), w2t.GetElement(1,1), w2t.GetElement(1,2), w2t.GetElement(1,3)))
+            r3=('{:6.3f} {:6.3f} {:6.3f} {:9.3f}'.format(w2t.GetElement(2,0), w2t.GetElement(2,1), w2t.GetElement(2,2), w2t.GetElement(2,3)))
+            w2t_matrix_text = '\nWork -> Tool Transformation:\n'+'   X      Y      Z      Pos\n'+r1+'\n'+r2+'\n'+r3
             backplot.update()
         else:
-            t2w_matrix_text = ''
+            w2t_matrix_text = ''
             backplot.update()
         # Update HUD
         if huds:
             for hud in huds:
-                hud.extra_text = t2w_matrix_text
+                if backplot.ready:
+                    hud.extra_text = w2t_matrix_text
                 hud.update()
         # With the sidepanel we have some more things to update depending on the button states
         if not mainWindow.no_buttons:
@@ -1258,13 +1361,24 @@ def main(argv_options, comp, model, huds=None,
                 camera.SetPosition  (cp[0] + x - xl, cp[1] + y - yl, cp[2] + z - zl)
                 mainWindow.last_tracking_position = x,y,z
         # Render updated data
-        mainWindow.vtkInteractor.GetRenderWindow().Render()
+        if model.first_update:
+            # make sure we show all actors on startup
+            renderer = mainWindow.vtkInteractor.GetRenderWindow().GetRenderers().GetFirstRenderer()
+            camera = renderer.GetActiveCamera()
+            renderer.ResetCamera()
+            model.first_update = False
+        else:
+            mainWindow.vtkInteractor.GetRenderWindow().Render()
+    # End of event loop
 
-    vcomp = hal.component('vismach')
-    vcomp.newpin('plotclear',hal.HAL_BIT,hal.HAL_IN)
-    vcomp.ready()
+    model.first_update = True
+    if not hal.component_exists('vismach'):
+        vcomp = hal.component('vismach')
+        vcomp.newpin('plotclear',hal.HAL_BIT,hal.HAL_IN)
+        vcomp.ready()
+    clearpin = 'vismach.plotclear'
     # create the backplot to be added to the renderer
-    backplot = _Plotter(model, vcomp, 'plotclear')
+    backplot = _Plotter(model, clearpin)
     # collect group tags
     model_groups = ModelGroups(model)
     # close vismach if linuxcnc is closed
@@ -1290,7 +1404,9 @@ def main(argv_options, comp, model, huds=None,
                             argv_options,
                             backplot,
                             huds,
-                            model_groups)
+                            guivars,
+                            model_groups,
+                            comp_prefix)
     # A renderer
     renderer = vtk.vtkRenderer()
     renderer.AddActor(model)
@@ -1330,6 +1446,7 @@ def main(argv_options, comp, model, huds=None,
     interactor_style = vtk.vtkInteractorStyleTrackballCamera()
     interactor.SetInteractorStyle(interactor_style)
     interactor.Initialize()
+
     # NOTE
     # We really only used Qt because we need a timer outside of VTK. Due to a vtk bug we cannot use
     # the vtk timer as it stops reporting when we interact with the window (eg rotating the scene)
