@@ -1,7 +1,7 @@
 While the general syntax structure from the current (opengl) version of vismach has been used as much as possible some changes were necessary:
 
 Same constructors used for static and as dynamic arguments.
-    Examples using the same constructor for a static rotation (ie using constants) and a dynamic rotation (ie using halpins):
+    Examples using the same constructor for a static rotation (ie using constants) and a dynamic rotation (ie using a halpin):
         Rotate([head],90,1,0,0)
         Rotate([rotary_table_c],hal,'joint.4.pos-fb',0,0,-1)
 
@@ -21,14 +21,20 @@ Using Local and global halpins:
             Translate([table],hal,"joint.0.pos-fb",0,"joint.2.pos-fb")
 
 NOTE: - Only one type of halpin (ie either all global or all local) can be used in the same constructor.
-        If local AND global pins are to be used in the same constructor the local pins must be passed with the
-        hal prefix of the vismach simulation.
+        If local AND global pins are to be used in the same constructor the local pins must be passed with the hal prefix of the vismach simulation.
 
             Translate([table],hal,"joint.0.pos-fb",0,"vtk-dmu-160-p-gui.mypin")
 
+
+Using status attributes:
+    Attributes from the status channel can be used. In this case a linuxcnc.stat() instance needs to be passed as the prefix so the model script requires 'import linuxcnc' and 's = linuxcnc.stat()'
+        Example 1:
+        x_slide = Translate([s_slide],s,0,0,'"actual_position[0]")
+
+
 Using expressions:
-    Expressions containing halpins can be passed as strings. Halpins used in expressions must be enclosed in curly brackets.
-    These expressions will have containing halpin values sampled and the expression evaluated on each update cycle.
+    Expressions containing halpins or status attributes be passed as strings. Halpins and attributes used in expressions must be enclosed in curly brackets.
+    These expressions will have containing halpin or attribute values sampled and the expression evaluated on each update cycle.
     Expressions may contain arithmetic and boolean operators as well as all functions provided by the python 'math' module.
         Example 1:
             tool = Translate([tool],hal,0,0,'-{motion.tooloffset.z}')
@@ -49,42 +55,42 @@ Using expressions:
 Model objects:
 
     * Box()  # Either specify the width in X and Y, and the height in Z or specify the two points across the diagonal
-        Box((comp),x1, y1, z1, x2, y2, z2)
-        Box((comp),xw, yw, zw)                                          # Creates a box centered on the origin
+        Box((prefix),x1, y1, z1, x2, y2, z2)
+        Box((prefix),xw, yw, zw) # Creates a box centered on the origin
 
     * Sphere()
-        Sphere((comp),radius)                                           # center position is set to (0,0,0)
-        Sphere((comp),x_center, y_center, z_center, radius)
+        Sphere((prefix),radius) # center position is set to (0,0,0)
+        Sphere((prefix),x_center, y_center, z_center, radius)
 
     * CylinderX()
-        CylinderX((comp),length, radius)                                # center position is set to (0,0,0)
-        CylinderX((comp),x_center, y_center, z_center, length, radius)
+        CylinderX((prefix),length, radius) # center position is set to (0,0,0)
+        CylinderX((prefix),x_center, y_center, z_center, length, radius)
 
     * CylinderY()
-        CylinderY((comp),length, radius)                                # center position is set to (0,0,0)
-        CylinderY((comp),x_center, y_center, z_center, length, radius)
+        CylinderY((prefix),length, radius) # center position is set to (0,0,0)
+        CylinderY((prefix),x_center, y_center, z_center, length, radius)
 
     * CylinderZ()
-        CylinderZ((comp),length, radius)                                # center position is set to (0,0,0)
-        CylinderZ((comp),x_center, y_center, z_center, length, radius)
+        CylinderZ((prefix),length, radius) # center position is set to (0,0,0)
+        CylinderZ((prefix),x_center, y_center, z_center, length, radius)
 
-    * Cylinder((comp),x_start, y_start, z_start, x_end, y_end, z_end, radius)
+    * Cylinder((prefix),x_start, y_start, z_start, x_end, y_end, z_end, radius)
 
-    * Line((comp),x_start, y_start, z_start, x_end, y_end, z_end)
+    * Line((prefix),x_start, y_start, z_start, x_end, y_end, z_end)
 
-    * Arrow((comp),x_start, y_start, z_start, x_end, y_end, z_end, radius)
+    * Arrow((prefix),x_start, y_start, z_start, x_end, y_end, z_end, radius)
 
-    * Grid((comp), quadrant_size, line_spacing)
+    * Grid((prefix), quadrant_size, line_spacing)
 
-        # Grid currently does not support the use of halpins as arguments
+        # Grid currently does not support the use of halpins or attributes as arguments
 
-    * Plane((comp),quadrant_size)
+    * Plane((prefix),quadrant_size)
 
-    * Axes((comp), scale)
+    * Axes((prefix), scale)
         # Creates a tryhedrom with 3 arrows pointing in the pricipal directions (red X, green Y, blue Z)
 
-    * ReadPolyData((comp), filename, path)
-        # ReadPolyData() will optionally accept a numeric 'filename' from a halpin.
+    * ReadPolyData((prefix), filename, path)
+        # ReadPolyData() will optionally accept a numeric 'filename' from a halpin or a status attribute.
         # The file location is constructed as follows:
                 path + <halpin_value> + '.stl'
         # Example loading 3d tool data dynamically on toolchange:
@@ -105,15 +111,15 @@ Model groups:
 Object manipulators:
     * Collection([parts])
     * Translate()
-        Translate([parts], (comp), x, y, z)
-        Translate([parts], (comp), x, y, z, vel_mode)
+        Translate([parts], (prefix), x, y, z)
+        Translate([parts], (prefix), x, y, z, vel_mode)
             # If 'vel_mode' is set to True the 'x','y','z' values are interpreted as a velocity command
         Rotate()
-        Rotate([parts], (comp), th, x, y, z)
-        Rotate([parts], (comp), th, x, y, z, vel_mode)
+        Rotate([parts], (prefix), th, x, y, z)
+        Rotate([parts], (prefix), th, x, y, z, vel_mode)
             # If 'vel_mode' is set to True the 'th' value is interpreted as a velocity command
-    * EulerRotate([parts], (comp), order, th1, th2, th3)
-    * MatrixTransform('[parts]','(comp)','xx','xy','xz','zx','zy','zz','px','py','pz')
+    * EulerRotate([parts], (prefix), order, th1, th2, th3)
+    * MatrixTransform('[parts]','(prefix)','xx','xy','xz','zx','zy','zz','px','py','pz')
         # Creates a 4x4 transformation matrix of the form:
             matrix = [[ xx, yx, zx, px],
                       [ xy, yy, zy, py],
@@ -122,18 +128,18 @@ Object manipulators:
         # Orientation vector Y is the cross product of the X and Z vectors: (zx,zy,zz) x (xx,xy,xz)
     * Scale()
         Scale([parts],scale_x, scale_y, scale_z)
-        Scale([parts], (comp), const, var, scalefactor_if_true, scalefactor_if_false)
+        Scale([parts], (prefix), const, var, scalefactor_if_true, scalefactor_if_false)
             # Checks if 'const' or Any item in 'const' == 'var' and applies the scalefactor given if true or false
             # This can be used to show or hide objects using scalefactors '1' and '0'
                 Example: 'work_plane = Scale([work_plane],c,True,'twp_active',1,0)'
     * Color()
-        Color([parts], (comp), vtk_color, opacity)
+        Color([parts], (prefix), vtk_color, opacity)
             Example:  Color([arrow_x], 'red', 1)
             # If only opacity is to be changed then vtk_color can be passed as None
               Example1: 'Color([work_plane_defined],c,None,0.5)'
               Example2: 'Color([work_plane_defined],c,None,('twp_defined',0.2))'
 
-        Color([parts], (comp), red, green, blue, opacity) # ie normalized R,G,B,A
+        Color([parts], (prefix), red, green, blue, opacity) # ie normalized R,G,B,A
             Example:  Color([work_plane_active],c,1,0,1,0.3)
             # Color() applies changes to the leaf nodes of the model tree. Hence a color change to a part
               created by a translation from another part will change the color of all instances of that part.
@@ -149,19 +155,19 @@ Textoverlay (HUD) constructor:
             Example 2: 'myhud.add_txt('Kinematic Mode: IDENTITY',0)'
                       'myhud.add_txt('Kinematic Mode: TCP',1)'
 
-        .add_pin(string, comp, pin, (tag))
-            # displays a formatted pin value (can be embedded in a string)
-            Example: 'myhud.add_pin('{:6.3f}        {:6.3f}',c,['twp_xx','twp_zx'])'
+        .add_var(string, prefix, var, (tag))
+            # displays a formatted halpin or status attribute value (can be embedded in a string)
+            Example: 'myhud.add_var('{:6.3f}        {:6.3f}',c,['twp_xx','twp_zx'])'
 
-        .show_tags_if_pin_eq_val(tags, comp, pin, (val=True))
-            # shows all lines with the specified tags if the pin value = val
+        .show_tags_if_var_eq_val(tags, prefix, var, (val=True))
+            # shows all lines with the specified tags if the var value = val
 
-        .show_tag_eq_pin_offs(comp, pin, (offs=0)):
-            # shows all lines with a tag equal to the pin value + offset
-            Example: 'myhud.show_tag_eq_pin_offs(hal,'motion.switchkins-type')'
+        .show_tag_eq_var_offs(prefix, var, (offs=0)):
+            # shows all lines with a tag equal to the var value + offset
+            Example: 'myhud.show_tag_eq_var_offs(hal,'motion.switchkins-type')'
 
-        .hide_hud(comp, pin, (val=True)):
-            # hides the hud if the pin value is equal to val
+        .hide_hud(prefix, var, (val=True)):
+            # hides the hud if the var value is equal to val
 
         # Multiple textoverlays can be used.
         # Example creating two textoverlays, one static and one dynamic:
