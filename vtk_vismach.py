@@ -17,7 +17,7 @@ except ImportError:
 # Check vtk version for minimum 9.7
 vtk_version_str = vtk.vtkVersion.GetVTKVersion()
 major, minor = vtk.vtkVersion.GetVTKMajorVersion(), vtk.vtkVersion.GetVTKMinorVersion()
-if (major < 9) or (major == 9 and minor < 7):
+if (major < 9) or (major == 9 and minor < 3):
     sys.exit(f"Vismach Error: Minimal vtk version required is 9.7. Found: {vtk_version_str}")
 import vtkmodules.qt
 # Force PyQt5 as Backend for VTK
@@ -395,7 +395,6 @@ class Arrow(ArgsBase, vtk.vtkActor):
         self.arrowSource.SetShaftRadius(radius)
         self.arrowSource.SetTipRadius(radius*1.6)
         self.arrowSource.SetTipResolution(self.resolution)
-        # Generate a random start and end point
         startPoint = [xs, ys, zs]
         endPoint = [xe, ye, ze]
         # Compute a basis
@@ -408,7 +407,8 @@ class Arrow(ArgsBase, vtk.vtkActor):
         if length < 0.1: length = 1
         self.arrowSource.SetTipLength(radius*8/length)
         vtk.vtkMath.Normalize(normalizedX)
-        vtk.vtkMath.Cross(normalizedX, [0,0,1], normalizedZ)
+        arbitrary = [1.0, 0.0, 0.0] if abs(normalizedX[0]) < 0.9 else [0.0, 1.0, 0.0]
+        vtk.vtkMath.Cross(normalizedX, arbitrary, normalizedZ)
         vtk.vtkMath.Normalize(normalizedZ)
         # The Y axis is Z cross X
         vtk.vtkMath.Cross(normalizedZ, normalizedX, normalizedY)
@@ -1394,7 +1394,7 @@ def main(argv_options, comp, model, huds=None, guivars=None,
     model.first_update = True
     if not hal.component_exists('vismach'):
         vcomp = hal.component('vismach')
-        vcomp.newpin('plotclear',hal.HAL_BIT,hal.HAL_IN)
+        vcomp.newpin('plotclear',hal.Type.BOOL,hal.HAL_IN)
         vcomp.ready()
     clearpin = 'vismach.plotclear'
     # create the backplot to be added to the renderer
