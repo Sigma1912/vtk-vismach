@@ -427,6 +427,115 @@ class Arrow(ArgsBase, vtk.vtkActor):
         transform.Translate(0, .5, 0)  # translate to start of cylinder
         self.SetUserMatrix(transform.GetMatrix())
 
+# Creates a 3D circular arrow from an arbitrary start_point (xs,ys,zs) around a center_point
+# rotating around axis_normal by angle in degrees
+class Arrow_circular(ArgsBase, vtk.vtkActor):
+    def get_expected_args(self):
+        return ('(prefix)','x_start', 'y_start', 'z_start', 'x_cntr', 'y_cntr', 'z_cntr', 'x_axis', 'y_axis', 'z_axis', 'angle', 'radius')
+
+    def create(self):
+        mapper = vtk.vtkPolyDataMapper()
+        self.arc_polydata = vtk.vtkPolyData()
+        self.tube = vtk.vtkTubeFilter()
+        self.tube.SetNumberOfSides(10)
+        self.tube.CappingOn()
+        self.cone = vtk.vtkConeSource()
+        self.cone.SetResolution(10)
+        self.append = vtk.vtkAppendPolyData()
+        self.append.AddInputConnection(self.tube.GetOutputPort())
+        self.append.AddInputConnection(self.cone.GetOutputPort())
+        mapper.SetInputData(self.append.GetOutput())
+        self.SetMapper(mapper)
+
+    def update(self):
+        xs, ys, zs, xc, yc, zc, xv, yv, zv, angle, radius,  = self.coords()
+        start_point = (xs,ys,zs)
+        center_point = (xc,yc,zc)
+        axis_normal = (xv, yv, zv)
+        angle_deg = angle
+        shaft_radius=radius
+        head_radius=3*radius
+        head_length=8*radius
+        resolution=20
+        # Normalize the rotation axis
+        n = list(axis_normal)
+        vtk.vtkMath.Normalize(n)
+        # Vector from center to start_point
+        v_start = [0.0, 0.0, 0.0]
+        vtk.vtkMath.Subtract(start_point, center_point, v_start)
+        # Project start_point onto the plane perpendicular to axis_normal
+        # This finds the true center of the circle in that plane
+        dot = vtk.vtkMath.Dot(v_start, n)
+        plane_center = [
+            center_point[0] + dot * n[0],
+            center_point[1] + dot * n[1],
+            center_point[2] + dot * n[2],
+        ]
+        # Radial vector in the plane of rotation
+        r_vec = [0.0, 0.0, 0.0]
+        vtk.vtkMath.Subtract(start_point, plane_center, r_vec)
+        arc_radius = vtk.vtkMath.Norm(r_vec)
+        if arc_radius < 1e-6:
+            return
+        # Calculate total arc length and adjust angle so the cone tip lands at angle_deg
+        total_angle_rad = radians(angle_deg)
+        total_arc_length = abs(total_angle_rad) * arc_radius
+        if total_arc_length <= head_length:
+            head_length = 0
+        # Angular span of the arrowhead vs. the shaft
+        head_angle_rad = (head_length / arc_radius) * (
+            1.0 if angle_deg >= 0 else -1.0
+        )
+        shaft_angle_rad = total_angle_rad - head_angle_rad
+        # Generate points along the arc using Rodrigues' rotation formula
+        points = vtk.vtkPoints()
+        lines = vtk.vtkCellArray()
+        lines.InsertNextCell(resolution + 1)
+        for i in range(resolution + 1):
+            theta = shaft_angle_rad * (i / resolution)
+            cos_t = cos(theta)
+            sin_t = sin(theta)
+            # n x r_vec
+            cross_nr = [0.0, 0.0, 0.0]
+            vtk.vtkMath.Cross(n, r_vec, cross_nr)
+            # Rotate r_vec around n by theta
+            p = [
+                plane_center[0] + r_vec[0] * cos_t + cross_nr[0] * sin_t,
+                plane_center[1] + r_vec[1] * cos_t + cross_nr[1] * sin_t,
+                plane_center[2] + r_vec[2] * cos_t + cross_nr[2] * sin_t,
+            ]
+            pid = points.InsertNextPoint(p)
+            lines.InsertCellPoint(pid)
+        self.arc_polydata.SetPoints(points)
+        self.arc_polydata.SetLines(lines)
+        # Extrude the arc into a 3D tube
+        self.tube.SetInputData(self.arc_polydata)
+        self.tube.SetRadius(shaft_radius)
+        self.tube.Update()
+        # Calculate cone position and tangent direction at the end of the shaft
+        end_shaft_pt = points.GetPoint(resolution)
+        radial_end = [0.0, 0.0, 0.0]
+        vtk.vtkMath.Subtract(end_shaft_pt, plane_center, radial_end)
+        # Tangent direction is n x radial_end (flipped if angle is negative)
+        tangent = [0.0, 0.0, 0.0]
+        vtk.vtkMath.Cross(n, radial_end, tangent)
+        vtk.vtkMath.Normalize(tangent)
+        if angle_deg < 0:
+            tangent = [-t for t in tangent]
+        # Position cone center half of head_length forward along the tangent
+        cone_center = [
+            end_shaft_pt[0] + tangent[0] * (head_length * 0.5),
+            end_shaft_pt[1] + tangent[1] * (head_length * 0.5),
+            end_shaft_pt[2] + tangent[2] * (head_length * 0.5),
+        ]
+        self.cone.SetCenter(cone_center)
+        self.cone.SetDirection(tangent)
+        self.cone.SetRadius(head_radius)
+        self.cone.SetHeight(head_length)
+        self.cone.Update()
+        # Combine shaft and arrowhead
+        self.append.Update()
+
 
 # Loads 3D geometry from file
 class ReadPolyData(ArgsBase, vtk.vtkActor):
@@ -546,6 +655,7 @@ class Axes(ArgsBase, vtk.vtkAssembly):
         except Exception as e:
             print("Vismach Value Error: %s, in %s"%(str(self.coords()),e))
             sys.exit()
+
 
 # draw a grid, use quad_size to define the size of a quadrant
 # As for why we are not using vtkRectilinearGrid() with wireframe for this see:
@@ -1305,7 +1415,7 @@ class MainWindow(Qt.QMainWindow):
         self.groups_checkbox_clicked = True
 
 
-def main(argv_options, comp, model, huds=None, guivars=None,
+def main(argv_options, comp, model, huds=None, guivars=None, function=None,
          window_title='Vtk-Vismach', window_width=600, window_height=300,
          camera_azimuth=-50, camera_elevation=30,
          background_rgb = (0.2, 0.3, 0.4)):
@@ -1350,6 +1460,9 @@ def main(argv_options, comp, model, huds=None, guivars=None,
                 if backplot.ready:
                     hud.extra_text = w2t_matrix_text
                 hud.update()
+                # Update HUD
+        if function:
+            function()
         # With the sidepanel we have some more things to update depending on the button states
         if not mainWindow.no_buttons:
             # Update HUD visibility

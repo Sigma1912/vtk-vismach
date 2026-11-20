@@ -33,7 +33,7 @@ Using status attributes:
 
 
 Using expressions:
-    Expressions containing halpins or status attributes be passed as strings. Halpins and attributes used in expressions must be enclosed in curly brackets.
+    Expressions containing halpins or status attributes can be passed as strings. Halpins and attributes used in expressions must be enclosed in curly brackets.
     These expressions will have containing halpin or attribute values sampled and the expression evaluated on each update cycle.
     Expressions may contain arithmetic and boolean operators as well as all functions provided by the python 'math' module.
         Example 1:
@@ -79,6 +79,10 @@ Model objects:
     * Line((prefix),x_start, y_start, z_start, x_end, y_end, z_end)
 
     * Arrow((prefix),x_start, y_start, z_start, x_end, y_end, z_end, radius)
+
+    * Arrow_circular('(prefix)','x_start', 'y_start', 'z_start',
+                                'x_cntr', 'y_cntr', 'z_cntr',
+                                'x_axis', 'y_axis', 'z_axis', 'angle', 'radius')
 
     * Grid((prefix), quadrant_size, line_spacing)
 
@@ -182,6 +186,22 @@ Capturing tooltip and work
         # No backplot will be shown if either of these objects are missing in the model tree.
 
 
+Periodically executed function
+    An optional function can be passed which will be executed on each update cycle. 
+    Use global variables for values that need to be retained from one cycle to the next.  
+    Example:
+		work_rotation_old = None
+		def myfunction():
+		    global work_rotation_old
+		    s.poll()
+		    work_rotation = [[ s.g68_kins_rotation[0], s.g68_kins_rotation[1], s.g68_kins_rotation[2] ],
+				     [ s.g68_kins_rotation[3], s.g68_kins_rotation[4], s.g68_kins_rotation[5] ],
+				     [ s.g68_kins_rotation[6], s.g68_kins_rotation[7], s.g68_kins_rotation[8] ]]
+		    if work_rotation != work_rotation_old:
+			# calculate rotation around Z from the rotation matrix
+			c["g68-work-rotation"] = -degrees(atan2(s.g68_kins_rotation[3], s.g68_kins_rotation[0]))
+                    work_rotation_old = work_rotation
+
 Arguments calling main function for model construction:
     Example:
             main(options,   # options passed as arguments when starting vismach
@@ -189,6 +209,7 @@ Arguments calling main function for model construction:
                  model,     # collection of all parts in the model tree
                             # ie 'model = Collection([.....])'
                  huds=[myhud1,myhud2],                      # optional text overlays
+                 function = myfunction,		            # optional function
                  window_width=1400, window_height=1000,     # optional window size
                  window_title = 'Vtk_Vismach Tutorial')     # optional window_title
 
