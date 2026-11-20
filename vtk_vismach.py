@@ -12,13 +12,13 @@ import sys
 try:
     import vtk
 except ImportError:
-    sys.exit("Vismach Error: Module 'vtk' not installed.")
+    sys.exit("Vismach Error: Module 'vtk' not installed. Try 'sudo apt install python3-vtk9' ")
 
 # Check vtk version for minimum 9.7
 vtk_version_str = vtk.vtkVersion.GetVTKVersion()
 major, minor = vtk.vtkVersion.GetVTKMajorVersion(), vtk.vtkVersion.GetVTKMinorVersion()
 if (major < 9) or (major == 9 and minor < 3):
-    sys.exit(f"Vismach Error: Minimal vtk version required is 9.7. Found: {vtk_version_str}")
+    sys.exit(f"Vismach Error: Minimal vtk version required is 9.3. Found: {vtk_version_str}")
 import vtkmodules.qt
 # Force PyQt5 as Backend for VTK
 vtkmodules.qt.PyQtImpl = "PyQt5"
