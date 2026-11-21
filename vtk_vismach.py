@@ -637,10 +637,10 @@ class Axes(ArgsBase, vtk.vtkAssembly):
             arrow = Arrow(0,0,0,1,0,0,0.02)
             transform = vtk.vtkTransform()
             colors = vtk.vtkNamedColors()
-            color = 'red'
+            color = 'lime'
             if axis == 'y':
                 transform.RotateZ(90)
-                color = 'lime'
+                color = 'red'
             elif axis == 'z':
                 transform.RotateY(-90)
                 color = 'blue'
@@ -1565,6 +1565,12 @@ def main(argv_options, comp, model, huds=None, guivars=None, function=None,
         axes.SetYAxisLabelText('Y')
         axes.SetZAxisLabelText('Z')
         axes.SetCylinderRadius(0.5 * axes.GetCylinderRadius())
+        # Set X axis to Green (0, 1, 0)
+        axes.GetXAxisShaftProperty().SetColor(0.0, 1.0, 0.0)
+        axes.GetXAxisTipProperty().SetColor(0.0, 1.0, 0.0)
+        # Set Y axis to Red (1, 0, 0)
+        axes.GetYAxisShaftProperty().SetColor(1.0, 0.0, 0.0)
+        axes.GetYAxisTipProperty().SetColor(1.0, 0.0, 0.0)
         return axes
     orientation_marker = vtk.vtkOrientationMarkerWidget()
     orientation_marker.SetOrientationMarker(trihedron())
